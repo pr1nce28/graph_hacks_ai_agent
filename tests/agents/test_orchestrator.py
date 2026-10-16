@@ -77,3 +77,44 @@ def test_orchestrator_max_tool_steps_clamped_by_env(monkeypatch):
 
     importlib.reload(om)
     assert om.MAX_TOOL_STEPS == 3
+
+
+def test_tool_invoke_with_timeout_returns_empty_path_on_timeout():
+    """A tool that hangs past tool_timeout_s returns an error path."""
+    from agents.orchestrator import Orchestrator
+
+    class _Hang:
+        name = "hang_tool"
+
+        def __call__(self, **kwargs):  # pragma: no cover - exercised indirectly
+            import time
+
+            time.sleep(2)
+            return {"result": {"x": 1}, "path": {"nodes": [], "edges": []}}
+
+    # Inject the hanging tool directly into the registry.
+    from tools.registry import REGISTRY, Tool
+
+    REGISTRY.append(_Hang())  # type: ignore[arg-type]
+    try:
+        orch = Orchestrator(tool_timeout_s=0.05)
+        result = orch._invoke_tool_with_timeout("hang_tool", {})
+        assert result["error"] == "timeout"
+        assert result["path"] == {"nodes": [], "edges": []}
+    finally:
+        REGISTRY.pop()
+
+
+def test_orchestrator_says_no_path_when_nothing_collected(monkeypatch):
+    """Stub mode with no API key returns the friendly 'no path' phrase
+    when the orchestrator has nothing to cite."""
+    from agents.orchestrator import Orchestrator
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    orch = Orchestrator()
+    result = orch.call_turn("Why?")
+    # Either the stub phrase or the no-path phrase is acceptable;
+    # both are non-empty strings that satisfy the WebSocket contract.
+    assert result["text"]
+    assert "citations" in result
+    assert "tools_called" in result

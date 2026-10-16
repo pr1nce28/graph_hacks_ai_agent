@@ -15,10 +15,16 @@ Key invariants:
   fail are dropped with a note in the event stream.
 * The loop runs at most ``MAX_TOOL_STEPS`` times (default 8, from
   ``.env.example``). Past that, the turn is cut off with a summary.
+* Each tool call is wrapped in a per-tool timeout
+  (``TOOL_TIMEOUT_S``). On timeout, the tool returns an empty path
+  with an error key and the loop continues (P5-B-01).
+* If the model never cites anything we have collected, the orchestrator
+  says "I don't have a path for that" instead of guessing (P5-B-01).
 """
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 import os
 import re
@@ -33,6 +39,7 @@ log = logging.getLogger("orgmind.orchestrator")
 
 DEFAULT_MODEL = os.environ.get("MODEL", "claude-sonnet-4-5")
 MAX_TOOL_STEPS = int(os.environ.get("MAX_TOOL_STEPS", "8"))
+TOOL_TIMEOUT_S = float(os.environ.get("TOOL_TIMEOUT_S", "10"))
 
 # Anything that looks like a node id in square brackets: [svc_auth], [dec_postgres].
 _CITATION_RE = re.compile(r"\[([A-Za-z_][\w]*)\]")
@@ -103,12 +110,14 @@ class Orchestrator:
     Args:
         model: Anthropic model id. Defaults to ``claude-sonnet-4-5``.
         max_tool_steps: hard cap on tool calls per turn.
+        tool_timeout_s: per-tool timeout in seconds. 0 disables.
         on_event: optional callback invoked for every OrchestratorEvent.
         api_key: optional Anthropic API key (defaults to env).
     """
 
     model: str = DEFAULT_MODEL
     max_tool_steps: int = MAX_TOOL_STEPS
+    tool_timeout_s: float = TOOL_TIMEOUT_S
     on_event: Optional[Callable[[OrchestratorEvent], None]] = None
     api_key: Optional[str] = None
     system_prompt_path: str = "agents/prompts/orchestrator.md"
@@ -198,11 +207,7 @@ class Orchestrator:
                         payload={"tool": name, "args": args, "step": step},
                     )
                 )
-                try:
-                    result = self._invoke_tool(name, args)
-                except Exception as exc:  # tool must not kill the loop
-                    log.warning("tool %s raised: %s", name, exc)
-                    result = {"error": str(exc), "path": {"nodes": [], "edges": []}}
+                result = self._invoke_tool_with_timeout(name, args)
                 seen_tools.append(name)
                 self._harvest_path(result)
                 self._emit(
@@ -224,8 +229,13 @@ class Orchestrator:
 
             messages.append({"role": "user", "content": tool_results})
 
-        # Citation enforcement.
+        # Citation enforcement + graceful empty result (P5-B-01).
         clean_text, dropped = _enforce_citations(final_text, self._collected_ids)
+        if not self._collected_ids and not clean_text.strip():
+            clean_text = (
+                "I don't have a path for that. Try asking about a specific "
+                "service, person or decision."
+            )
         answer_payload = {
             "text": clean_text,
             "citations": sorted(self._collected_ids),
@@ -259,6 +269,22 @@ class Orchestrator:
                     args = {**args, "tenant": self.tenant}
                 return t(**args)
         raise KeyError(f"unknown tool: {name}")
+
+    def _invoke_tool_with_timeout(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
+        """Run a tool with a timeout; on timeout/exception, return an empty
+        GraphPath with an ``error`` key so the loop keeps going."""
+        if self.tool_timeout_s <= 0:
+            return self._invoke_tool(name, args)  # unbounded
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                future = ex.submit(self._invoke_tool, name, args)
+                return future.result(timeout=self.tool_timeout_s)
+        except concurrent.futures.TimeoutError:
+            log.warning("tool %s timed out after %.1fs", name, self.tool_timeout_s)
+            return {"error": "timeout", "path": {"nodes": [], "edges": []}}
+        except Exception as exc:
+            log.warning("tool %s raised: %s", name, exc)
+            return {"error": str(exc), "path": {"nodes": [], "edges": []}}
 
     def _harvest_path(self, tool_result: dict[str, Any]) -> None:
         """Collect every node id mentioned in the tool result's path block."""
