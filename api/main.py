@@ -1,11 +1,12 @@
 """OrgMind FastAPI service.
 
-Phase 0 skeleton. See `docs/CONTRACTS.md` \u00a75 for the locked REST surface.
+Phase 0+ skeleton. See `docs/CONTRACTS.md` §5 for the locked REST surface.
 
 Endpoints:
-    GET /health   -> liveness probe
-    GET /tenants  -> list available tenant graphs
-    GET /info     -> service metadata
+    GET  /health                          -> liveness probe
+    GET  /tenants                         -> list available tenant graphs
+    GET  /info                            -> service metadata
+    WS   /ws/chat?tenant=&session=        -> stream orchestrator events
 """
 
 from __future__ import annotations
@@ -15,6 +16,8 @@ from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from api.ws import router as ws_router
 
 log = logging.getLogger("orgmind.api")
 
@@ -33,10 +36,10 @@ _P0_FALLBACK_TENANTS: list[str] = ["org_acme", "org_globex"]
 
 app = FastAPI(
     title="OrgMind API",
-    version="0.1.0",
+    version="0.2.0",
     description=(
-        "Phase 0 skeleton for the OrgMind Company Brain. "
-        "See docs/CONTRACTS.md \u00a75 for the locked REST surface."
+        "OrgMind Company Brain. WebSocket chat streams the orchestrator; "
+        "see docs/CONTRACTS.md §2 for the event protocol."
     ),
 )
 
@@ -44,11 +47,13 @@ app = FastAPI(
 # later phases; for P0 we only need the local dev server to talk to us.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3001"],
+    allow_origins=["http://localhost:3001", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(ws_router)
 
 
 def _resolve_tenants() -> list[str]:
@@ -80,7 +85,7 @@ def info() -> dict[str, Any]:
     """Service metadata used by the web UI to confirm the API is reachable."""
     return {
         "name": "OrgMind",
-        "phase": 0,
+        "phase": 2,
         "tracks": [
             "agents-on-connected-data",
             "memory-coordination",

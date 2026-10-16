@@ -1,0 +1,1 @@
+"""OrgMind data package: synthetic seed generator."""

@@ -1,0 +1,1284 @@
+{
+  "decisions": [
+    {
+      "affects_ids": [
+        "svc_payments"
+      ],
+      "based_on_ids": [
+        "msg_postgres_thread",
+        "doc_postgres_design",
+        "ticket_postgres_eval"
+      ],
+      "decided_at": 1700000000,
+      "decider_id": "person_uma_hossain",
+      "id": "dec_postgres",
+      "summary": "Pick Postgres for the new payments service after the bake-off.",
+      "title": "Choose Postgres over Mongo"
+    },
+    {
+      "affects_ids": [],
+      "based_on_ids": [],
+      "decided_at": 1700086400,
+      "decider_id": "person_uma_zima",
+      "id": "dec_001",
+      "summary": "Move service-to-service traffic to gRPC after the spike.",
+      "title": "Adopt gRPC for internal APIs"
+    },
+    {
+      "affects_ids": [],
+      "based_on_ids": [],
+      "decided_at": 1700172800,
+      "decider_id": "person_yara_diallo",
+      "id": "dec_002",
+      "summary": "Risk team gets a dedicated PM next quarter.",
+      "title": "Hire dedicated Risk PM"
+    },
+    {
+      "affects_ids": [],
+      "based_on_ids": [],
+      "decided_at": 1700259200,
+      "decider_id": "person_mila_diallo",
+      "id": "dec_003",
+      "summary": "Hold the MobX rewrite until after launch.",
+      "title": "Defer MobX rewrite"
+    },
+    {
+      "affects_ids": [],
+      "based_on_ids": [],
+      "decided_at": 1700345600,
+      "decider_id": "person_kavi_ndlovu",
+      "id": "dec_004",
+      "summary": "Lineder replaces Initech for KYC.",
+      "title": "Switch to Lineder KYC vendor"
+    },
+    {
+      "affects_ids": [],
+      "based_on_ids": [],
+      "decided_at": 1700432000,
+      "decider_id": "person_uma_hossain",
+      "id": "dec_005",
+      "summary": "OPA becomes the only authz policy engine.",
+      "title": "Standardise on OPA for authz"
+    },
+    {
+      "affects_ids": [],
+      "based_on_ids": [],
+      "decided_at": 1700518400,
+      "decider_id": "person_mila_tashkin",
+      "id": "dec_006",
+      "summary": "OKRs for Q4 frozen.",
+      "title": "Quarterly OKRs locked"
+    },
+    {
+      "affects_ids": [],
+      "based_on_ids": [],
+      "decided_at": 1700604800,
+      "decider_id": "person_xenia_vargas",
+      "id": "dec_007",
+      "summary": "v3 risk scoring rolled out behind a flag.",
+      "title": "Risk score v3 rollout"
+    },
+    {
+      "affects_ids": [],
+      "based_on_ids": [],
+      "decided_at": 1700691200,
+      "decider_id": "person_kavi_ndlovu",
+      "id": "dec_008",
+      "summary": "Push notifications consolidated onto SNS.",
+      "title": "Notifications via SNS"
+    },
+    {
+      "affects_ids": [],
+      "based_on_ids": [],
+      "decided_at": 1700777600,
+      "decider_id": "person_asha_cho",
+      "id": "dec_009",
+      "summary": "ES8 replaces ES7 for the search service.",
+      "title": "Search moves to Elasticsearch 8"
+    },
+    {
+      "affects_ids": [],
+      "based_on_ids": [],
+      "decided_at": 1700864000,
+      "decider_id": "person_uma_zima",
+      "id": "dec_010",
+      "summary": "Ledger format is now strict double-entry.",
+      "title": "Ledger moved to double-entry"
+    },
+    {
+      "affects_ids": [],
+      "based_on_ids": [],
+      "decided_at": 1700950400,
+      "decider_id": "person_uma_zima",
+      "id": "dec_011",
+      "summary": "New template adds the action-item owner field.",
+      "title": "Postmortem template updated"
+    }
+  ],
+  "documents": [
+    {
+      "author_id": "person_xenia_vargas",
+      "created_at": 1700000000,
+      "id": "doc_000",
+      "text": "Search ranking. Lorem ipsum synthetic body for 0.",
+      "title": "Search ranking"
+    },
+    {
+      "author_id": "person_uma_hossain",
+      "created_at": 1700003600,
+      "id": "doc_001",
+      "text": "Search ranking. Lorem ipsum synthetic body for 1.",
+      "title": "Search ranking"
+    },
+    {
+      "author_id": "person_uma_zima",
+      "created_at": 1700007200,
+      "id": "doc_002",
+      "text": "Observability stack. Lorem ipsum synthetic body for 2.",
+      "title": "Observability stack"
+    },
+    {
+      "author_id": "person_kavi_ndlovu",
+      "created_at": 1700010800,
+      "id": "doc_003",
+      "text": "gRPC migration plan. Lorem ipsum synthetic body for 3.",
+      "title": "gRPC migration plan"
+    },
+    {
+      "author_id": "person_mila_tashkin",
+      "created_at": 1700014400,
+      "id": "doc_004",
+      "text": "Dispute flow. Lorem ipsum synthetic body for 4.",
+      "title": "Dispute flow"
+    },
+    {
+      "author_id": "person_kavi_ndlovu",
+      "created_at": 1700018000,
+      "id": "doc_005",
+      "text": "Dispute flow. Lorem ipsum synthetic body for 5.",
+      "title": "Dispute flow"
+    },
+    {
+      "author_id": "person_kavi_ndlovu",
+      "created_at": 1700021600,
+      "id": "doc_006",
+      "text": "KYC vendor selection. Lorem ipsum synthetic body for 6.",
+      "title": "KYC vendor selection"
+    },
+    {
+      "author_id": "person_uma_hossain",
+      "created_at": 1700025200,
+      "id": "doc_007",
+      "text": "Auth redesign. Lorem ipsum synthetic body for 7.",
+      "title": "Auth redesign"
+    },
+    {
+      "author_id": "person_mila_tashkin",
+      "created_at": 1700028800,
+      "id": "doc_008",
+      "text": "PCI compliance. Lorem ipsum synthetic body for 8.",
+      "title": "PCI compliance"
+    },
+    {
+      "author_id": "person_uma_zima",
+      "created_at": 1700032400,
+      "id": "doc_009",
+      "text": "Architecture overview. Lorem ipsum synthetic body for 9.",
+      "title": "Architecture overview"
+    },
+    {
+      "author_id": "person_uma_zima",
+      "created_at": 1700000000,
+      "id": "doc_postgres_design",
+      "text": "Bake-off results favour Postgres for the new payments service.",
+      "title": "Postgres vs Mongo design doc"
+    }
+  ],
+  "edges": {
+    "ABOUT": [
+      {
+        "from_id": "fact_deadline_v1",
+        "rel": "ABOUT",
+        "to_id": "svc_payments"
+      },
+      {
+        "from_id": "fact_deadline_v2",
+        "rel": "ABOUT",
+        "to_id": "svc_payments"
+      }
+    ],
+    "AFFECTS": [
+      {
+        "from_id": "dec_postgres",
+        "rel": "AFFECTS",
+        "to_id": "svc_payments"
+      }
+    ],
+    "AUTHORED": [
+      {
+        "from_id": "person_xenia_vargas",
+        "rel": "AUTHORED",
+        "to_id": "doc_000"
+      },
+      {
+        "from_id": "person_uma_hossain",
+        "rel": "AUTHORED",
+        "to_id": "doc_001"
+      },
+      {
+        "from_id": "person_uma_zima",
+        "rel": "AUTHORED",
+        "to_id": "doc_002"
+      },
+      {
+        "from_id": "person_kavi_ndlovu",
+        "rel": "AUTHORED",
+        "to_id": "doc_003"
+      },
+      {
+        "from_id": "person_mila_tashkin",
+        "rel": "AUTHORED",
+        "to_id": "doc_004"
+      },
+      {
+        "from_id": "person_kavi_ndlovu",
+        "rel": "AUTHORED",
+        "to_id": "doc_005"
+      },
+      {
+        "from_id": "person_kavi_ndlovu",
+        "rel": "AUTHORED",
+        "to_id": "doc_006"
+      },
+      {
+        "from_id": "person_uma_hossain",
+        "rel": "AUTHORED",
+        "to_id": "doc_007"
+      },
+      {
+        "from_id": "person_mila_tashkin",
+        "rel": "AUTHORED",
+        "to_id": "doc_008"
+      },
+      {
+        "from_id": "person_uma_zima",
+        "rel": "AUTHORED",
+        "to_id": "doc_009"
+      },
+      {
+        "from_id": "person_uma_zima",
+        "rel": "AUTHORED",
+        "to_id": "doc_postgres_design"
+      },
+      {
+        "from_id": "person_mila_tashkin",
+        "rel": "AUTHORED",
+        "to_id": "ticket_000"
+      },
+      {
+        "from_id": "person_xenia_vargas",
+        "rel": "AUTHORED",
+        "to_id": "ticket_001"
+      },
+      {
+        "from_id": "person_xenia_vargas",
+        "rel": "AUTHORED",
+        "to_id": "ticket_002"
+      },
+      {
+        "from_id": "person_asha_cho",
+        "rel": "AUTHORED",
+        "to_id": "ticket_003"
+      },
+      {
+        "from_id": "person_kavi_ndlovu",
+        "rel": "AUTHORED",
+        "to_id": "ticket_004"
+      },
+      {
+        "from_id": "person_mila_diallo",
+        "rel": "AUTHORED",
+        "to_id": "ticket_005"
+      },
+      {
+        "from_id": "person_asha_cho",
+        "rel": "AUTHORED",
+        "to_id": "ticket_006"
+      },
+      {
+        "from_id": "person_mila_tashkin",
+        "rel": "AUTHORED",
+        "to_id": "ticket_007"
+      },
+      {
+        "from_id": "person_uma_zima",
+        "rel": "AUTHORED",
+        "to_id": "ticket_008"
+      },
+      {
+        "from_id": "person_mila_tashkin",
+        "rel": "AUTHORED",
+        "to_id": "ticket_009"
+      },
+      {
+        "from_id": "person_asha_cho",
+        "rel": "AUTHORED",
+        "to_id": "ticket_010"
+      },
+      {
+        "from_id": "person_yara_diallo",
+        "rel": "AUTHORED",
+        "to_id": "ticket_011"
+      },
+      {
+        "from_id": "person_uma_zima",
+        "rel": "AUTHORED",
+        "to_id": "ticket_postgres_eval"
+      },
+      {
+        "from_id": "person_xenia_vargas",
+        "rel": "AUTHORED",
+        "to_id": "msg_000"
+      },
+      {
+        "from_id": "person_mila_tashkin",
+        "rel": "AUTHORED",
+        "to_id": "msg_001"
+      },
+      {
+        "from_id": "person_uma_hossain",
+        "rel": "AUTHORED",
+        "to_id": "msg_002"
+      },
+      {
+        "from_id": "person_xenia_vargas",
+        "rel": "AUTHORED",
+        "to_id": "msg_003"
+      },
+      {
+        "from_id": "person_mila_tashkin",
+        "rel": "AUTHORED",
+        "to_id": "msg_004"
+      },
+      {
+        "from_id": "person_xenia_vargas",
+        "rel": "AUTHORED",
+        "to_id": "msg_005"
+      },
+      {
+        "from_id": "person_uma_zima",
+        "rel": "AUTHORED",
+        "to_id": "msg_006"
+      },
+      {
+        "from_id": "person_mila_tashkin",
+        "rel": "AUTHORED",
+        "to_id": "msg_007"
+      },
+      {
+        "from_id": "person_mila_diallo",
+        "rel": "AUTHORED",
+        "to_id": "msg_008"
+      },
+      {
+        "from_id": "person_asha_cho",
+        "rel": "AUTHORED",
+        "to_id": "msg_009"
+      },
+      {
+        "from_id": "person_mila_tashkin",
+        "rel": "AUTHORED",
+        "to_id": "msg_010"
+      },
+      {
+        "from_id": "person_yara_diallo",
+        "rel": "AUTHORED",
+        "to_id": "msg_011"
+      },
+      {
+        "from_id": "person_mila_tashkin",
+        "rel": "AUTHORED",
+        "to_id": "msg_012"
+      },
+      {
+        "from_id": "person_asha_cho",
+        "rel": "AUTHORED",
+        "to_id": "msg_013"
+      },
+      {
+        "from_id": "person_yara_diallo",
+        "rel": "AUTHORED",
+        "to_id": "msg_014"
+      },
+      {
+        "from_id": "person_asha_cho",
+        "rel": "AUTHORED",
+        "to_id": "msg_015"
+      },
+      {
+        "from_id": "person_mila_tashkin",
+        "rel": "AUTHORED",
+        "to_id": "msg_016"
+      },
+      {
+        "from_id": "person_uma_hossain",
+        "rel": "AUTHORED",
+        "to_id": "msg_017"
+      },
+      {
+        "from_id": "person_mila_diallo",
+        "rel": "AUTHORED",
+        "to_id": "msg_018"
+      },
+      {
+        "from_id": "person_kavi_ndlovu",
+        "rel": "AUTHORED",
+        "to_id": "msg_019"
+      },
+      {
+        "from_id": "person_mila_tashkin",
+        "rel": "AUTHORED",
+        "to_id": "msg_020"
+      },
+      {
+        "from_id": "person_uma_hossain",
+        "rel": "AUTHORED",
+        "to_id": "msg_021"
+      },
+      {
+        "from_id": "person_xenia_vargas",
+        "rel": "AUTHORED",
+        "to_id": "msg_022"
+      },
+      {
+        "from_id": "person_mila_diallo",
+        "rel": "AUTHORED",
+        "to_id": "msg_023"
+      },
+      {
+        "from_id": "person_uma_zima",
+        "rel": "AUTHORED",
+        "to_id": "msg_postgres_thread"
+      }
+    ],
+    "BASED_ON": [
+      {
+        "from_id": "dec_postgres",
+        "rel": "BASED_ON",
+        "to_id": "msg_postgres_thread"
+      },
+      {
+        "from_id": "dec_postgres",
+        "rel": "BASED_ON",
+        "to_id": "doc_postgres_design"
+      },
+      {
+        "from_id": "dec_postgres",
+        "rel": "BASED_ON",
+        "to_id": "ticket_postgres_eval"
+      }
+    ],
+    "DECIDED": [
+      {
+        "from_id": "person_uma_hossain",
+        "rel": "DECIDED",
+        "to_id": "dec_postgres"
+      },
+      {
+        "from_id": "person_uma_zima",
+        "rel": "DECIDED",
+        "to_id": "dec_001"
+      },
+      {
+        "from_id": "person_yara_diallo",
+        "rel": "DECIDED",
+        "to_id": "dec_002"
+      },
+      {
+        "from_id": "person_mila_diallo",
+        "rel": "DECIDED",
+        "to_id": "dec_003"
+      },
+      {
+        "from_id": "person_kavi_ndlovu",
+        "rel": "DECIDED",
+        "to_id": "dec_004"
+      },
+      {
+        "from_id": "person_uma_hossain",
+        "rel": "DECIDED",
+        "to_id": "dec_005"
+      },
+      {
+        "from_id": "person_mila_tashkin",
+        "rel": "DECIDED",
+        "to_id": "dec_006"
+      },
+      {
+        "from_id": "person_xenia_vargas",
+        "rel": "DECIDED",
+        "to_id": "dec_007"
+      },
+      {
+        "from_id": "person_kavi_ndlovu",
+        "rel": "DECIDED",
+        "to_id": "dec_008"
+      },
+      {
+        "from_id": "person_asha_cho",
+        "rel": "DECIDED",
+        "to_id": "dec_009"
+      },
+      {
+        "from_id": "person_uma_zima",
+        "rel": "DECIDED",
+        "to_id": "dec_010"
+      },
+      {
+        "from_id": "person_uma_zima",
+        "rel": "DECIDED",
+        "to_id": "dec_011"
+      }
+    ],
+    "DEPENDS_ON": [
+      {
+        "from_id": "svc_billing",
+        "rel": "DEPENDS_ON",
+        "to_id": "svc_auth"
+      },
+      {
+        "from_id": "svc_payments",
+        "rel": "DEPENDS_ON",
+        "to_id": "svc_billing"
+      },
+      {
+        "from_id": "svc_payments",
+        "rel": "DEPENDS_ON",
+        "to_id": "svc_auth"
+      },
+      {
+        "from_id": "svc_ledger",
+        "rel": "DEPENDS_ON",
+        "to_id": "svc_billing"
+      },
+      {
+        "from_id": "svc_ledger",
+        "rel": "DEPENDS_ON",
+        "to_id": "svc_auth"
+      },
+      {
+        "from_id": "svc_kyc",
+        "rel": "DEPENDS_ON",
+        "to_id": "svc_billing"
+      },
+      {
+        "from_id": "svc_kyc",
+        "rel": "DEPENDS_ON",
+        "to_id": "svc_payments"
+      },
+      {
+        "from_id": "svc_billing",
+        "rel": "DEPENDS_ON",
+        "to_id": "svc_auth"
+      },
+      {
+        "from_id": "svc_payments",
+        "rel": "DEPENDS_ON",
+        "to_id": "svc_auth"
+      },
+      {
+        "from_id": "svc_ledger",
+        "rel": "DEPENDS_ON",
+        "to_id": "svc_auth"
+      }
+    ],
+    "MEMBER_OF": [
+      {
+        "from_id": "person_uma_zima",
+        "rel": "MEMBER_OF",
+        "to_id": "team_growth"
+      },
+      {
+        "from_id": "person_kavi_ndlovu",
+        "rel": "MEMBER_OF",
+        "to_id": "team_growth"
+      },
+      {
+        "from_id": "person_asha_cho",
+        "rel": "MEMBER_OF",
+        "to_id": "team_risk"
+      },
+      {
+        "from_id": "person_mila_diallo",
+        "rel": "MEMBER_OF",
+        "to_id": "team_payments"
+      },
+      {
+        "from_id": "person_mila_tashkin",
+        "rel": "MEMBER_OF",
+        "to_id": "team_payments"
+      },
+      {
+        "from_id": "person_yara_diallo",
+        "rel": "MEMBER_OF",
+        "to_id": "team_mobile"
+      },
+      {
+        "from_id": "person_xenia_vargas",
+        "rel": "MEMBER_OF",
+        "to_id": "team_growth"
+      },
+      {
+        "from_id": "person_uma_hossain",
+        "rel": "MEMBER_OF",
+        "to_id": "team_payments"
+      }
+    ],
+    "MENTIONS": [
+      {
+        "from_id": "doc_000",
+        "rel": "MENTIONS",
+        "to_id": "ticket_004"
+      },
+      {
+        "from_id": "doc_000",
+        "rel": "MENTIONS",
+        "to_id": "ticket_005"
+      },
+      {
+        "from_id": "doc_001",
+        "rel": "MENTIONS",
+        "to_id": "ticket_011"
+      },
+      {
+        "from_id": "doc_001",
+        "rel": "MENTIONS",
+        "to_id": "doc_005"
+      },
+      {
+        "from_id": "doc_002",
+        "rel": "MENTIONS",
+        "to_id": "doc_005"
+      },
+      {
+        "from_id": "doc_002",
+        "rel": "MENTIONS",
+        "to_id": "ticket_postgres_eval"
+      },
+      {
+        "from_id": "doc_003",
+        "rel": "MENTIONS",
+        "to_id": "ticket_005"
+      },
+      {
+        "from_id": "doc_003",
+        "rel": "MENTIONS",
+        "to_id": "ticket_007"
+      },
+      {
+        "from_id": "doc_004",
+        "rel": "MENTIONS",
+        "to_id": "doc_003"
+      },
+      {
+        "from_id": "doc_004",
+        "rel": "MENTIONS",
+        "to_id": "ticket_005"
+      },
+      {
+        "from_id": "doc_005",
+        "rel": "MENTIONS",
+        "to_id": "doc_004"
+      },
+      {
+        "from_id": "doc_005",
+        "rel": "MENTIONS",
+        "to_id": "ticket_010"
+      },
+      {
+        "from_id": "doc_006",
+        "rel": "MENTIONS",
+        "to_id": "ticket_005"
+      },
+      {
+        "from_id": "doc_006",
+        "rel": "MENTIONS",
+        "to_id": "ticket_008"
+      },
+      {
+        "from_id": "doc_007",
+        "rel": "MENTIONS",
+        "to_id": "ticket_000"
+      },
+      {
+        "from_id": "doc_007",
+        "rel": "MENTIONS",
+        "to_id": "doc_002"
+      },
+      {
+        "from_id": "doc_008",
+        "rel": "MENTIONS",
+        "to_id": "ticket_011"
+      },
+      {
+        "from_id": "doc_008",
+        "rel": "MENTIONS",
+        "to_id": "ticket_007"
+      },
+      {
+        "from_id": "doc_009",
+        "rel": "MENTIONS",
+        "to_id": "doc_005"
+      },
+      {
+        "from_id": "doc_009",
+        "rel": "MENTIONS",
+        "to_id": "doc_001"
+      },
+      {
+        "from_id": "doc_postgres_design",
+        "rel": "MENTIONS",
+        "to_id": "doc_003"
+      },
+      {
+        "from_id": "doc_postgres_design",
+        "rel": "MENTIONS",
+        "to_id": "ticket_011"
+      },
+      {
+        "from_id": "ticket_000",
+        "rel": "MENTIONS",
+        "to_id": "ticket_010"
+      },
+      {
+        "from_id": "ticket_000",
+        "rel": "MENTIONS",
+        "to_id": "ticket_010"
+      }
+    ],
+    "OWNS": [
+      {
+        "owned_id": "svc_auth",
+        "owner_id": "team_platform",
+        "rel": "OWNS"
+      },
+      {
+        "owned_id": "svc_payments",
+        "owner_id": "team_platform",
+        "rel": "OWNS"
+      },
+      {
+        "owned_id": "svc_ledger",
+        "owner_id": "team_mobile",
+        "rel": "OWNS"
+      },
+      {
+        "owned_id": "svc_kyc",
+        "owner_id": "team_growth",
+        "rel": "OWNS"
+      },
+      {
+        "owned_id": "svc_billing",
+        "owner_id": "team_payments",
+        "rel": "OWNS"
+      }
+    ],
+    "WORKED_ON": [
+      {
+        "from_id": "person_uma_zima",
+        "rel": "WORKED_ON",
+        "to_id": "svc_auth"
+      },
+      {
+        "from_id": "person_asha_cho",
+        "rel": "WORKED_ON",
+        "to_id": "svc_auth"
+      },
+      {
+        "from_id": "person_xenia_vargas",
+        "rel": "WORKED_ON",
+        "to_id": "svc_billing"
+      },
+      {
+        "from_id": "person_asha_cho",
+        "rel": "WORKED_ON",
+        "to_id": "svc_billing"
+      },
+      {
+        "from_id": "person_kavi_ndlovu",
+        "rel": "WORKED_ON",
+        "to_id": "svc_payments"
+      },
+      {
+        "from_id": "person_uma_hossain",
+        "rel": "WORKED_ON",
+        "to_id": "svc_payments"
+      },
+      {
+        "from_id": "person_mila_tashkin",
+        "rel": "WORKED_ON",
+        "to_id": "svc_ledger"
+      },
+      {
+        "from_id": "person_yara_diallo",
+        "rel": "WORKED_ON",
+        "to_id": "svc_ledger"
+      },
+      {
+        "from_id": "person_xenia_vargas",
+        "rel": "WORKED_ON",
+        "to_id": "svc_kyc"
+      },
+      {
+        "from_id": "person_kavi_ndlovu",
+        "rel": "WORKED_ON",
+        "to_id": "svc_kyc"
+      },
+      {
+        "from_id": "person_uma_zima",
+        "rel": "WORKED_ON",
+        "to_id": "svc_billing"
+      },
+      {
+        "from_id": "person_uma_zima",
+        "rel": "WORKED_ON",
+        "to_id": "svc_billing"
+      },
+      {
+        "from_id": "person_uma_zima",
+        "rel": "WORKED_ON",
+        "to_id": "svc_billing"
+      },
+      {
+        "from_id": "person_uma_zima",
+        "rel": "WORKED_ON",
+        "to_id": "svc_billing"
+      },
+      {
+        "from_id": "person_uma_zima",
+        "rel": "WORKED_ON",
+        "to_id": "svc_billing"
+      },
+      {
+        "from_id": "person_uma_zima",
+        "rel": "WORKED_ON",
+        "to_id": "svc_billing"
+      }
+    ]
+  },
+  "facts": [
+    {
+      "about_ids": [
+        "svc_payments"
+      ],
+      "confidence": 1.0,
+      "id": "fact_deadline_v1",
+      "status": "superseded",
+      "text": "The launch deadline is Oct 31.",
+      "valid_from": 1700000000,
+      "valid_to": 1700500000
+    },
+    {
+      "about_ids": [
+        "svc_payments"
+      ],
+      "confidence": 1.0,
+      "id": "fact_deadline_v2",
+      "status": "active",
+      "text": "The launch deadline is Nov 30.",
+      "valid_from": 1700500000,
+      "valid_to": null
+    }
+  ],
+  "messages": [
+    {
+      "author_id": "person_xenia_vargas",
+      "channel": "#growth",
+      "id": "msg_000",
+      "text": "I'll pick this up tomorrow morning.",
+      "ts": 1700000000
+    },
+    {
+      "author_id": "person_mila_tashkin",
+      "channel": "#risk",
+      "id": "msg_001",
+      "text": "Question: who owns the auth service?",
+      "ts": 1700000600
+    },
+    {
+      "author_id": "person_uma_hossain",
+      "channel": "#platform",
+      "id": "msg_002",
+      "text": "Postgres won the bake-off; rationale in the doc.",
+      "ts": 1700001200
+    },
+    {
+      "author_id": "person_xenia_vargas",
+      "channel": "#payments",
+      "id": "msg_003",
+      "text": "Heads up, we're seeing elevated error rates.",
+      "ts": 1700001800
+    },
+    {
+      "author_id": "person_mila_tashkin",
+      "channel": "#growth",
+      "id": "msg_004",
+      "text": "Document updated. See <link>.",
+      "ts": 1700002400
+    },
+    {
+      "author_id": "person_xenia_vargas",
+      "channel": "#risk",
+      "id": "msg_005",
+      "text": "Agreed. Let's roll it out behind a flag.",
+      "ts": 1700003000
+    },
+    {
+      "author_id": "person_uma_zima",
+      "channel": "#risk",
+      "id": "msg_006",
+      "text": "Agreed. Let's roll it out behind a flag.",
+      "ts": 1700003600
+    },
+    {
+      "author_id": "person_mila_tashkin",
+      "channel": "#growth",
+      "id": "msg_007",
+      "text": "Question: who owns the auth service?",
+      "ts": 1700004200
+    },
+    {
+      "author_id": "person_mila_diallo",
+      "channel": "#platform",
+      "id": "msg_008",
+      "text": "Document updated. See <link>.",
+      "ts": 1700004800
+    },
+    {
+      "author_id": "person_asha_cho",
+      "channel": "#platform",
+      "id": "msg_009",
+      "text": "I'll pick this up tomorrow morning.",
+      "ts": 1700005400
+    },
+    {
+      "author_id": "person_mila_tashkin",
+      "channel": "#payments",
+      "id": "msg_010",
+      "text": "Agreed. Let's roll it out behind a flag.",
+      "ts": 1700006000
+    },
+    {
+      "author_id": "person_yara_diallo",
+      "channel": "#mobile",
+      "id": "msg_011",
+      "text": "Agreed. Let's roll it out behind a flag.",
+      "ts": 1700006600
+    },
+    {
+      "author_id": "person_mila_tashkin",
+      "channel": "#platform",
+      "id": "msg_012",
+      "text": "Wait \u2014 has the ledger team signed off?",
+      "ts": 1700007200
+    },
+    {
+      "author_id": "person_asha_cho",
+      "channel": "#risk",
+      "id": "msg_013",
+      "text": "Postgres won the bake-off; rationale in the doc.",
+      "ts": 1700007800
+    },
+    {
+      "author_id": "person_yara_diallo",
+      "channel": "#platform",
+      "id": "msg_014",
+      "text": "FYI: PCI audit next week.",
+      "ts": 1700008400
+    },
+    {
+      "author_id": "person_asha_cho",
+      "channel": "#growth",
+      "id": "msg_015",
+      "text": "I'll pick this up tomorrow morning.",
+      "ts": 1700009000
+    },
+    {
+      "author_id": "person_mila_tashkin",
+      "channel": "#risk",
+      "id": "msg_016",
+      "text": "Question: who owns the auth service?",
+      "ts": 1700009600
+    },
+    {
+      "author_id": "person_uma_hossain",
+      "channel": "#risk",
+      "id": "msg_017",
+      "text": "Wait \u2014 has the ledger team signed off?",
+      "ts": 1700010200
+    },
+    {
+      "author_id": "person_mila_diallo",
+      "channel": "#payments",
+      "id": "msg_018",
+      "text": "FYI: PCI audit next week.",
+      "ts": 1700010800
+    },
+    {
+      "author_id": "person_kavi_ndlovu",
+      "channel": "#mobile",
+      "id": "msg_019",
+      "text": "Document updated. See <link>.",
+      "ts": 1700011400
+    },
+    {
+      "author_id": "person_mila_tashkin",
+      "channel": "#mobile",
+      "id": "msg_020",
+      "text": "Agreed. Let's roll it out behind a flag.",
+      "ts": 1700012000
+    },
+    {
+      "author_id": "person_uma_hossain",
+      "channel": "#growth",
+      "id": "msg_021",
+      "text": "Wait \u2014 has the ledger team signed off?",
+      "ts": 1700012600
+    },
+    {
+      "author_id": "person_xenia_vargas",
+      "channel": "#risk",
+      "id": "msg_022",
+      "text": "I'll pick this up tomorrow morning.",
+      "ts": 1700013200
+    },
+    {
+      "author_id": "person_mila_diallo",
+      "channel": "#risk",
+      "id": "msg_023",
+      "text": "Wait \u2014 has the ledger team signed off?",
+      "ts": 1700013800
+    },
+    {
+      "author_id": "person_uma_zima",
+      "channel": "#payments",
+      "id": "msg_postgres_thread",
+      "text": "Postgres won the bake-off; rationale in the doc.",
+      "ts": 1700000000
+    }
+  ],
+  "people": [
+    {
+      "email": "uma_zima@example.com",
+      "id": "person_uma_zima",
+      "name": "Uma Zima",
+      "role": "senior_engineer",
+      "team_id": "team_growth"
+    },
+    {
+      "email": "kavi_ndlovu@example.com",
+      "id": "person_kavi_ndlovu",
+      "name": "Kavi Ndlovu",
+      "role": "pm",
+      "team_id": "team_growth"
+    },
+    {
+      "email": "asha_cho@example.com",
+      "id": "person_asha_cho",
+      "name": "Asha Cho",
+      "role": "designer",
+      "team_id": "team_risk"
+    },
+    {
+      "email": "mila_diallo@example.com",
+      "id": "person_mila_diallo",
+      "name": "Mila Diallo",
+      "role": "pm",
+      "team_id": "team_payments"
+    },
+    {
+      "email": "mila_tashkin@example.com",
+      "id": "person_mila_tashkin",
+      "name": "Mila Tashkin",
+      "role": "staff_engineer",
+      "team_id": "team_payments"
+    },
+    {
+      "email": "yara_diallo@example.com",
+      "id": "person_yara_diallo",
+      "name": "Yara Diallo",
+      "role": "staff_engineer",
+      "team_id": "team_mobile"
+    },
+    {
+      "email": "xenia_vargas@example.com",
+      "id": "person_xenia_vargas",
+      "name": "Xenia Vargas",
+      "role": "designer",
+      "team_id": "team_growth"
+    },
+    {
+      "email": "uma_hossain@example.com",
+      "id": "person_uma_hossain",
+      "name": "Uma Hossain",
+      "role": "designer",
+      "team_id": "team_payments"
+    }
+  ],
+  "services": [
+    {
+      "id": "svc_auth",
+      "name": "auth",
+      "tier": "tier-2"
+    },
+    {
+      "id": "svc_billing",
+      "name": "billing",
+      "tier": "tier-1"
+    },
+    {
+      "id": "svc_payments",
+      "name": "payments",
+      "tier": "tier-2"
+    },
+    {
+      "id": "svc_ledger",
+      "name": "ledger",
+      "tier": "tier-3"
+    },
+    {
+      "id": "svc_kyc",
+      "name": "kyc",
+      "tier": "tier-2"
+    }
+  ],
+  "teams": [
+    {
+      "id": "team_platform",
+      "name": "Platform"
+    },
+    {
+      "id": "team_payments",
+      "name": "Payments"
+    },
+    {
+      "id": "team_risk",
+      "name": "Risk"
+    },
+    {
+      "id": "team_growth",
+      "name": "Growth"
+    },
+    {
+      "id": "team_mobile",
+      "name": "Mobile"
+    }
+  ],
+  "tenant": "org_globex",
+  "tickets": [
+    {
+      "author_id": "person_mila_tashkin",
+      "created_at": 1700000000,
+      "id": "ticket_000",
+      "status": "open",
+      "text": "Risk false positive. Synthetic ticket body.",
+      "title": "Risk false positive"
+    },
+    {
+      "author_id": "person_xenia_vargas",
+      "created_at": 1700001800,
+      "id": "ticket_001",
+      "status": "in_progress",
+      "text": "Risk false positive. Synthetic ticket body.",
+      "title": "Risk false positive"
+    },
+    {
+      "author_id": "person_xenia_vargas",
+      "created_at": 1700003600,
+      "id": "ticket_002",
+      "status": "open",
+      "text": "Ledger off-by-1. Synthetic ticket body.",
+      "title": "Ledger off-by-1"
+    },
+    {
+      "author_id": "person_asha_cho",
+      "created_at": 1700005400,
+      "id": "ticket_003",
+      "status": "done",
+      "text": "Webhook signature mismatch. Synthetic ticket body.",
+      "title": "Webhook signature mismatch"
+    },
+    {
+      "author_id": "person_kavi_ndlovu",
+      "created_at": 1700007200,
+      "id": "ticket_004",
+      "status": "open",
+      "text": "Ledger off-by-1. Synthetic ticket body.",
+      "title": "Ledger off-by-1"
+    },
+    {
+      "author_id": "person_mila_diallo",
+      "created_at": 1700009000,
+      "id": "ticket_005",
+      "status": "in_progress",
+      "text": "Webhook signature mismatch. Synthetic ticket body.",
+      "title": "Webhook signature mismatch"
+    },
+    {
+      "author_id": "person_asha_cho",
+      "created_at": 1700010800,
+      "id": "ticket_006",
+      "status": "done",
+      "text": "Payments double charge. Synthetic ticket body.",
+      "title": "Payments double charge"
+    },
+    {
+      "author_id": "person_mila_tashkin",
+      "created_at": 1700012600,
+      "id": "ticket_007",
+      "status": "in_progress",
+      "text": "Push notification missed. Synthetic ticket body.",
+      "title": "Push notification missed"
+    },
+    {
+      "author_id": "person_uma_zima",
+      "created_at": 1700014400,
+      "id": "ticket_008",
+      "status": "in_progress",
+      "text": "Payments double charge. Synthetic ticket body.",
+      "title": "Payments double charge"
+    },
+    {
+      "author_id": "person_mila_tashkin",
+      "created_at": 1700016200,
+      "id": "ticket_009",
+      "status": "in_progress",
+      "text": "Mobile crash on cold start. Synthetic ticket body.",
+      "title": "Mobile crash on cold start"
+    },
+    {
+      "author_id": "person_asha_cho",
+      "created_at": 1700018000,
+      "id": "ticket_010",
+      "status": "done",
+      "text": "Search NPE. Synthetic ticket body.",
+      "title": "Search NPE"
+    },
+    {
+      "author_id": "person_yara_diallo",
+      "created_at": 1700019800,
+      "id": "ticket_011",
+      "status": "in_progress",
+      "text": "KYC timeout. Synthetic ticket body.",
+      "title": "KYC timeout"
+    },
+    {
+      "author_id": "person_uma_zima",
+      "created_at": 1700000000,
+      "id": "ticket_postgres_eval",
+      "status": "done",
+      "text": "Run the bake-off and pick a database.",
+      "title": "Evaluate Postgres for new payments service"
+    }
+  ]
+}
