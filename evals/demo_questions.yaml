@@ -43,7 +43,7 @@ questions:
 
   - id: q3_ownership_vs_expertise
     track: 3   # Company Brain
-    falkordb_feature: pattern matching + aggregation
+    falkordb_feature: OWNS vs AUTHORED aggregation (ownership vs expertise gap)
     question: "Who really owns the billing service? The team on paper or the person who has actually done the work?"
     expected_tools:
       - search_entities
