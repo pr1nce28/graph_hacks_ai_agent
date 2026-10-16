@@ -1,0 +1,84 @@
+# 5 Demo Questions — Phase 0 lock (P0-ALL-05)
+# Each question has: id, question, expected_tools, expected_answer_facts,
+# track (1=Agents on Connected Data, 2=Memory/Coordination, 3=Company Brain),
+# falkordb_feature (which graph capability is on the critical path).
+#
+# Evals are loaded by evals/run_evals.py and exercise the live API.
+# Hard facts are asserted as substrings in the final answer or as ids in the
+# cited path. The exact id strings match the synthetic seed in
+# data/generate_synthetic.py (P1).
+
+questions:
+  - id: q1_decision_provenance
+    track: 3   # Company Brain
+    falkordb_feature: traversal (Decision BASED_ON *1..n)
+    question: "Why did we choose Postgres over Mongo for the new payments service?"
+    expected_tools:
+      - recall
+      - search_entities
+      - trace_decision
+    expected_answer_facts:
+      - "Postgres"
+      - "Mongo"
+      - "payments"
+      - "decided_at"   # must surface decision date from the Decision node
+    expected_path_node_ids:
+      - dec_postgres
+    why_graph_loads_it: "Baselines that only do vector search will miss the explicit Decision->Message->Document provenance chain."
+
+  - id: q2_impact_analysis
+    track: 1   # Agents That Act on Connected Data
+    falkordb_feature: variable-length DEPENDS_ON* + OWNS join
+    question: "If we change the auth service, which teams and services are affected?"
+    expected_tools:
+      - recall
+      - impact_analysis
+      - create_ticket
+    expected_answer_facts:
+      - "auth"
+      - "Team"          # ownership must surface
+    expected_path_node_ids:
+      - svc_auth
+    why_graph_loads_it: "Requires transitive DEPENDS_ON closure joined to OWNS owners; vector search alone cannot enumerate blast radius."
+
+  - id: q3_ownership_vs_expertise
+    track: 3   # Company Brain
+    falkordb_feature: pattern matching + aggregation
+    question: "Who really owns the billing service? The team on paper or the person who has actually done the work?"
+    expected_tools:
+      - search_entities
+      - find_owner
+      - find_experts
+    expected_answer_facts:
+      - "billing"
+      - "Team"
+      - "Person"
+    why_graph_loads_it: "Comparing aggregated AUTHORED + WORKED_ON counts to formal OWNS needs a graph; a vector index cannot compute this."
+
+  - id: q4_memory_supersede
+    track: 2   # Agent Memory and Coordination
+    falkordb_feature: vector recall + SUPERSEDES chain
+    question: "Did the launch deadline change since last week?"
+    expected_tools:
+      - recall
+    expected_answer_facts:
+      - "deadline"
+      - "Nov 30"        # new, active fact
+    expected_path_node_ids:
+      - fact_deadline_v2
+    why_graph_loads_it: "A vector store would just return both facts. The graph keeps a SUPERSEDES edge so the old fact is marked superseded and the active one is the only thing recall returns by default."
+
+  - id: q5_multi_agent_handoff
+    track: 2   # Agent Memory and Coordination
+    falkordb_feature: Task / Handoff graph writes
+    question: "Notify everyone affected by the auth change that the launch moved to Nov 30."
+    expected_tools:
+      - impact_analysis
+      - handoff
+      - create_ticket
+      - draft_message
+    expected_answer_facts:
+      - "auth"
+      - "Nov 30"
+      - "ticket"
+    why_graph_loads_it: "The handoff is a Handoff node linked to the Task; the action agent reads state from the graph, not from a Python variable, so the demo can be inspected and audited."
