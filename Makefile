@@ -1,4 +1,4 @@
-.PHONY: up down seed eval eval-baseline cypher-doc dev-api dev-web mcp test load-test reset-demo fmt lint
+.PHONY: up down seed eval eval-baseline eval-repeat cypher-doc dev-api dev-web mcp test load-test reset-demo fmt lint
 
 # ---- Stack lifecycle ----
 up:
@@ -32,6 +32,9 @@ eval:
 
 eval-baseline:
 	docker compose run --rm api python -m evals.baseline_vector_only
+
+eval-repeat:
+	docker compose run --rm api python -m evals.repeat_evals --runs 10
 
 cypher-doc:
 	docker compose run --rm api python -m scripts.export_cypher_doc

@@ -1,0 +1,31 @@
+{
+  "mode": "schema",
+  "runs": 3,
+  "questions": {
+    "q1_decision_provenance": {
+      "passes": 3,
+      "fails": 0,
+      "pass_rate": 1.0
+    },
+    "q2_impact_analysis": {
+      "passes": 3,
+      "fails": 0,
+      "pass_rate": 1.0
+    },
+    "q3_ownership_vs_expertise": {
+      "passes": 3,
+      "fails": 0,
+      "pass_rate": 1.0
+    },
+    "q4_memory_supersede": {
+      "passes": 3,
+      "fails": 0,
+      "pass_rate": 1.0
+    },
+    "q5_multi_agent_handoff": {
+      "passes": 3,
+      "fails": 0,
+      "pass_rate": 1.0
+    }
+  }
+}
