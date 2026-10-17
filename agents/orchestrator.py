@@ -379,14 +379,22 @@ class Orchestrator:
             )
 
     def _invoke_tool(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
-        """Find the registered tool and call it. Adds tenant if missing."""
-        for t in REGISTRY:
-            if t.name == name:
-                # Every tool expects tenant — inject it from the orchestrator.
-                if "tenant" not in args:
-                    args = {**args, "tenant": self.tenant}
-                return t(**args)
-        raise KeyError(f"unknown tool: {name}")
+        """Invoke a tool through the configured transport.
+
+        ``TOOL_TRANSPORT=inprocess`` calls the function directly;
+        ``TOOL_TRANSPORT=mcp`` routes through the MCP server, so the
+        same tool catalogue is reachable over the protocol.
+        """
+        # Every tool expects tenant — inject it from the orchestrator.
+        if "tenant" not in args:
+            args = {**args, "tenant": self.tenant}
+
+        from agents.transport import call_tool as transport_call_tool
+
+        names = {t.name for t in REGISTRY}
+        if name not in names:
+            raise KeyError(f"unknown tool: {name}")
+        return transport_call_tool(name, args)
 
     def _invoke_tool_with_timeout(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
         """Run a tool with a timeout; on timeout/exception, return an empty

@@ -10,13 +10,19 @@ authors = [{ name = "OrgMind contributors" }]
 dependencies = [
     "falkordb>=1.0",
     "anthropic>=0.40",
-    "fastapi>=0.110",
+    "fastapi>=0.110,<0.116",
+    # FastAPI 0.115 needs starlette <0.42. Installing `mcp` pulls a much
+    # newer starlette by default, which breaks FastAPI's Router (it
+    # passes on_startup, removed in starlette 1.x). Pin it explicitly.
+    "starlette>=0.40,<0.42",
     "uvicorn[standard]>=0.30",
     "pydantic>=2.7",
     "sentence-transformers>=3.0",
     "pyyaml>=6.0",
     "httpx>=0.27",
-    "mcp>=0.5",
+    # MCP: 2.x renamed FastMCP -> MCPServer; mcp_server/server.py
+    # supports both, so either major version works.
+    "mcp>=1.0",
 ]
 
 [project.optional-dependencies]

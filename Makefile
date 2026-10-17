@@ -1,4 +1,4 @@
-.PHONY: up down seed eval eval-baseline eval-repeat cypher-doc dev-api dev-web mcp test load-test reset-demo fmt lint
+.PHONY: up down seed eval eval-baseline eval-repeat cypher-doc dev-api dev-web mcp mcp-smoke live-check configure-falkordb test load-test reset-demo fmt lint
 
 # ---- Stack lifecycle ----
 up:
@@ -41,6 +41,15 @@ cypher-doc:
 
 mcp:
 	docker compose run --rm api python -m mcp_server.server
+
+mcp-smoke:
+	docker compose run --rm api python -m scripts.mcp_smoke
+
+live-check:
+	docker compose run --rm api python -m scripts.live_query_check --require
+
+configure-falkordb:
+	docker compose run --rm api python -m scripts.configure_falkordb --url "$(URL)"
 
 test:
 	docker compose run --rm api pytest -q

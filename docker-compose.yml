@@ -45,6 +45,29 @@ services:
       - .:/app
     command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: orgmind_mcp
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      - FALKORDB_HOST=falkordb
+      - FALKORDB_PORT=6379
+      - MCP_TRANSPORT=stdio
+    volumes:
+      - .:/app
+    # MCP over stdio: attach a client with
+    #   docker compose run --rm mcp
+    # or run it over HTTP with MCP_TRANSPORT=streamable-http and the
+    # ports mapping below.
+    # ports:
+    #   - "8001:8000"
+    command: python -m mcp_server.server
+
   web:
     build:
       context: ./web
