@@ -181,28 +181,22 @@ class DevGraph:
         # vector-entry matcher, which would otherwise swallow them.
         if "db.idx.vector.queryNodes" in c and "Fact" in c:
             return self._h_q_recall_facts
-        if "db.idx.vector.queryNodes" in c and "AUTHORED" in c:
-            return self._h_q_find_experts
         if "db.idx.vector.queryNodes" in c:
             return self._h_q_vector_entry
         if "<-[:OWNS]-(o)" in c:
             return self._h_q_find_owner
         if "BASED_ON" in c and c.startswith("MATCH (d:Decision"):
             return self._h_q_trace_decision
-        if "DEPENDS_ON*" in c or "<-[:DEPENDS_ON" in c:
+        if "DEPENDS_ON" in c:
             return self._h_q_impact_analysis
-        if "shortestPath" in c:
+        if "algo.SPpaths" in c or "shortestPath" in c:
             return self._h_q_shortest_path
         if "algo.pageRank" in c:
             return self._h_q_centrality
         if c.startswith("MATCH (old:Fact {id: $old_id})"):
             return self._h_q_supersede
-        if "AUTHORED" in c and "score" in c:
+        if c.startswith("MATCH (p:Person)-[r:AUTHORED|WORKED_ON]->(n)"):
             return self._h_q_find_experts
-        if c.startswith("MATCH (p:Person)-[:WORKED_ON|AUTHORED]->(n)"):
-            return self._h_q_find_experts_fallback
-        if c.startswith("MATCH (f:Fact) WHERE f.status = 'active'"):
-            return self._h_q_recall_fallback
         if c.startswith("MATCH (f:Fact) WHERE f.status = 'active'"):
             return self._h_q_recall_fallback
         if "MATCH (p:Procedure) WHERE p.name = $name" in c:
@@ -217,14 +211,10 @@ class DevGraph:
             return self._h_q_mark_task_done
         if c.startswith("MATCH (t:Task {id: $tid}) SET") and "status = $s" in c:
             return self._h_q_mark_task_done
-        if "MATCH (s:Service {id: $sid})<-[:DEPENDS_ON" in c:
-            return self._h_q_impact_analysis
         if c.startswith("MATCH (o)-[:OWNS]->(e)"):
             return self._h_q_find_owner
         if c.startswith("MATCH (e {id: $eid})<-[:OWNS]-(o)"):
             return self._h_q_find_owner
-        if "MATCH (a {id: $a}), (b {id: $b})" in c and "shortestPath" in c:
-            return self._h_q_shortest_path
         if "MATCH (n {id: $id})" in c and "RETURN n" in c:
             return self._h_q_neighbors
         return None
@@ -367,12 +357,15 @@ class DevGraph:
     # -- critical query handlers ----------------------------------------
 
     def _h_q_vector_entry(self, c: str, p: dict) -> DevResult:
-        labels = None
-        m = re.search(r"queryNodes\('([^']*)'", c)
-        if m and m.group(1):
-            # The Cypher label clause looks like ':Decision' or
-            # ':Document|Message'; strip the leading ':' from each part.
-            labels = [lbl.lstrip(":") for lbl in m.group(1).split("|") if lbl]
+        # q_vector_entry queries one label at a time via the $label param.
+        label = p.get("label")
+        labels: list[str] = []
+        if isinstance(label, str) and label:
+            labels = [lbl.lstrip(":") for lbl in label.split("|") if lbl]
+        else:
+            m = re.search(r"queryNodes\('([^']*)'", c)
+            if m and m.group(1):
+                labels = [lbl.lstrip(":") for lbl in m.group(1).split("|") if lbl]
         k = int(p.get("k", 5))
         if labels:
             candidates = [n for n in self._nodes.values() if any(l in n["labels"] for l in labels)]
@@ -471,11 +464,13 @@ class DevGraph:
         return DevResult(["dep", "owner"], rows)
 
     def _h_q_shortest_path(self, c: str, p: dict) -> DevResult:
+        # q_shortest_path uses algo.SPpaths and returns path / pathWeight.
         a, b = p["a"], p["b"]
         path = self._bfs(a, b, max_hops=8)
         if not path:
-            return DevResult(["p", "hops"], [])
-        return DevResult(["p", "hops"], [[path, len(path) - 1]])
+            return DevResult(["path", "pathWeight"], [])
+        nodes = [_node_view(n) for n in path]
+        return DevResult(["path", "pathWeight"], [[nodes, len(path) - 1]])
 
     def _bfs(self, a: str, b: str, max_hops: int) -> Optional[list[dict]]:
         from collections import deque
@@ -532,22 +527,32 @@ class DevGraph:
         )
 
     def _h_q_find_experts(self, c: str, p: dict) -> DevResult:
-        # Weighted AUTHORED(2) + WORKED_ON(1) per person.
+        """Weighted AUTHORED(2) + WORKED_ON(1) per person, filtered by
+        the topic appearing in the entity's id/name/title/text."""
+        topic = str(p.get("topic", "")).lower()
+        k = int(p.get("k", 5))
         scores: dict[str, int] = {}
         for r in self._rels:
-            if r["type"] == "AUTHORED":
-                scores[r["source"]] = scores.get(r["source"], 0) + 2
-            elif r["type"] == "WORKED_ON":
-                scores[r["source"]] = scores.get(r["source"], 0) + 1
-        k = int(p.get("k", 5))
+            if r["type"] not in ("AUTHORED", "WORKED_ON"):
+                continue
+            target = self._nodes.get(r["target"])
+            if target is None:
+                continue
+            props = target["props"]
+            # The node id lives outside props, so include it explicitly.
+            hay = " ".join(
+                [str(target["id"])]
+                + [str(props.get(kk, "")) for kk in ("name", "title", "text")]
+            ).lower()
+            if topic and topic not in hay:
+                continue
+            weight = 2 if r["type"] == "AUTHORED" else 1
+            scores[r["source"]] = scores.get(r["source"], 0) + weight
         ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)[:k]
         rows = [
             [_node_view(self._nodes[nid]), float(s)] for nid, s in ranked if nid in self._nodes
         ]
         return DevResult(["p", "score"], rows)
-
-    def _h_q_find_experts_fallback(self, c: str, p: dict) -> DevResult:
-        return self._h_q_find_experts(c, p)
 
     def _h_q_find_procedure(self, c: str, p: dict) -> DevResult:
         for n in self.nodes_with_label("Procedure"):

@@ -169,24 +169,15 @@ def find_owner(entity_id: str, tenant: str) -> dict[str, Any]:
 
 @Tool
 def find_experts(topic: str, tenant: str, top_k: int = 5) -> dict[str, Any]:
-    """Return people ranked by weighted AUTHORED + WORKED_ON edges for ``topic``."""
+    """Return people ranked by weighted AUTHORED + WORKED_ON edges for ``topic``.
+
+    ``topic`` may be an entity id (``svc_billing``) or a word
+    (``billing``); the query matches either.
+    """
     graph = get_graph(tenant)
-    embedding = embed_texts([topic])[0]
-    try:
-        result = q_find_experts(graph, embedding, top_k=top_k)
-    except Exception:
-        # Fallback if the vector query path is unavailable.
-        cypher = (
-            "MATCH (p:Person)-[:WORKED_ON|AUTHORED]->(n) "
-            "WITH p, count(*) AS score "
-            "RETURN p, score ORDER BY score DESC LIMIT $k"
-        )
-        started = __import__("time").perf_counter()
-        raw = graph.query(cypher, params={"k": top_k})
-        rows = list(getattr(raw, "result_set", []) or [])
-        result = QueryResult(rows=rows, ms=(__import__("time").perf_counter() - started) * 1000.0, cypher=cypher)
+    result = q_find_experts(graph, topic, top_k=top_k)
     return {
-        "result": {"rows": result.rows},
+        "result": {"rows": result.rows, "topic": topic},
         "path": _result_to_path(result),
         "cypher": result.cypher,
         "ms": result.ms,

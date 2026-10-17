@@ -73,25 +73,67 @@ def clear_cache() -> None:
     _cache.clear()
 
 
+def _hash_embedding(text: str) -> list[float]:
+    """Deterministic bag-of-words hashing embedding, L2-normalised.
+
+    Used when the transformer model is unavailable (no
+    sentence-transformers, or torch's DLLs are blocked by policy). It is
+    not as good as a real sentence encoder, but it makes vector search
+    *functional and deterministic* rather than returning zero vectors,
+    which would make every cosine score degenerate.
+
+    Each token is hashed into a few of the ``EMBED_DIM`` buckets with a
+    signed contribution (the "hashing trick"), then L2-normalised, so
+    texts sharing words get a non-zero cosine similarity.
+    """
+    import hashlib
+    import math
+    import re
+
+    vec = [0.0] * EMBED_DIM
+    tokens = re.findall(r"[a-z0-9_]+", text.lower())
+    if not tokens:
+        idx = int(hashlib.md5(text.encode("utf-8")).hexdigest(), 16) % EMBED_DIM
+        vec[idx] = 1.0
+        return vec
+
+    for tok in tokens:
+        h = hashlib.md5(tok.encode("utf-8")).digest()
+        for j in range(3):
+            idx = int.from_bytes(h[j * 4 : j * 4 + 4], "little") % EMBED_DIM
+            sign = 1.0 if (h[j] & 1) else -1.0
+            vec[idx] += sign
+
+    norm = math.sqrt(sum(v * v for v in vec))
+    if norm == 0.0:
+        return vec
+    return [v / norm for v in vec]
+
+
 def embed_texts(texts: Iterable[str]) -> list[list[float]]:
     """Embed ``texts`` to ``EMBED_DIM``-dimensional vectors.
 
-    If the model is unavailable, returns zero vectors of the right shape
-    so the rest of the pipeline keeps working in degraded mode (e.g.
-    during a CI run without ML deps installed). Results are memoised in
-    an LRU keyed on the text.
-
-    Any ``OSError`` raised while loading or running the model (e.g.
-    torch DLL blocked by an Application Control policy) is treated as
-    "model unavailable for this process" and zero vectors are returned.
-    The error is logged at most once per process via ``_load_failed``.
+    Falls back to a deterministic hashing embedding when the transformer
+    model is unavailable, so vector search keeps working in any
+    environment. Results are memoised in an LRU keyed on the text.
     """
     global _load_failed
     texts_list = list(texts)
     if not texts_list:
         return []
     if not is_available() or _load_failed:
-        return [[0.0] * EMBED_DIM for _ in texts_list]
+        out: list[list[float]] = []
+        for t in texts_list:
+            if t in _cache:
+                _cache.move_to_end(t)
+                out.append(_cache[t])
+            else:
+                v = _hash_embedding(t)
+                _cache[t] = v
+                while len(_cache) > _CACHE_MAX:
+                    _cache.popitem(last=False)
+                out.append(v)
+        return out
 
     try:
         model = _load_model()
@@ -121,10 +163,12 @@ def embed_texts(texts: Iterable[str]) -> list[list[float]]:
         except OSError as exc:  # pragma: no cover - env-specific
             _load_failed = True
             import logging
+
             logging.getLogger("orgmind.embeddings").warning(
-                "model.encode failed (%s); zero vectors this process", exc,
+                "model.encode failed (%s); using the deterministic hashing "
+                "fallback for this process", exc,
             )
-            return [[0.0] * EMBED_DIM for _ in texts_list]
+            return [_hash_embedding(t) for t in texts_list]
         for t, v in zip(to_compute, vectors):
             _cache[t] = list(map(float, v))
             while len(_cache) > _CACHE_MAX:

@@ -58,21 +58,91 @@ class QueryResult:
         return f"QueryResult(rows={len(self.rows)}, ms={self.ms:.1f})"
 
 
+def _column_names(result: Any) -> list[str]:
+    """Extract column names from a falkordb (or dev) result object.
+
+    The real ``falkordb.QueryResult`` exposes ``.header`` as a list of
+    ``[type_code, name]`` pairs (e.g. ``[[1, 'd'], [1, 'evidence']]``),
+    while the in-memory dev backend exposes a flat list. Normalise both.
+    """
+    raw = getattr(result, "header", None)
+    if raw is None:
+        raw = getattr(result, "headers", None)
+    if not raw:
+        return []
+    names: list[str] = []
+    for item in raw:
+        if isinstance(item, (list, tuple)) and len(item) >= 2:
+            names.append(str(item[1]))
+        else:
+            names.append(str(item))
+    return names
+
+
+def _value_to_python(value: Any) -> Any:
+    """Convert a falkordb Node/Edge into a plain JSON-able dict.
+
+    ``falkordb`` returns ``Node`` and ``Edge`` objects, not dicts. Every
+    downstream consumer (GraphPath projection, the UI, citation
+    harvesting) expects ``{"id": ..., "label": ..., "name": ...}``, so
+    flatten here, once.
+
+    Plain scalars (str/int/float/bool/None) and already-plain dicts and
+    lists pass through unchanged, which keeps the dev backend working.
+    """
+    # Node-like: has .properties and .labels
+    props = getattr(value, "properties", None)
+    labels = getattr(value, "labels", None)
+    if isinstance(props, dict) and labels is not None:
+        out = dict(props)
+        # Never ship the raw embedding: 384 floats per node would bloat
+        # every WebSocket frame and the UI does not use it.
+        out.pop("embedding", None)
+        label_list = list(labels) if not isinstance(labels, str) else [labels]
+        out["labels"] = label_list
+        out.setdefault("id", out.get("id"))
+        out["label"] = label_list[0] if label_list else "Node"
+        if "name" not in out:
+            out["name"] = (
+                out.get("name")
+                or out.get("title")
+                or out.get("text")
+                or out.get("summary")
+                or out.get("goal")
+                or out.get("id")
+            )
+        return out
+    # Edge-like: has .type and .properties
+    etype = getattr(value, "type", None)
+    if isinstance(props, dict) and isinstance(etype, str):
+        out = dict(props)
+        out["type"] = etype
+        return out
+    if isinstance(value, dict):
+        return {k: _value_to_python(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_value_to_python(v) for v in value]
+    return value
+
+
 def _run(graph: FalkorDBGraph, cypher: str, params: dict[str, Any] | None = None) -> QueryResult:
-    """Execute ``cypher`` and capture the rows as dicts + the elapsed time."""
+    """Execute ``cypher`` and capture the rows as dicts + the elapsed time.
+
+    Handles both the real ``falkordb`` client and the in-memory dev
+    backend, normalising node/edge objects into plain dicts and the
+    header format into a flat list of names.
+    """
     started = time.perf_counter()
     result = graph.query(cypher, params=params or {})
-    # ``falkordb`` returns a ``Result`` with ``.result_set`` (list of lists)
-    # and ``.headers`` (list of column names). We don't always have those
-    # attributes on older clients, so guard.
-    headers = list(getattr(result, "headers", []) or [])
+    columns = _column_names(result)
     set_rows = list(getattr(result, "result_set", []) or [])
     rows: list[dict[str, Any]] = []
     for r in set_rows:
-        if headers:
-            rows.append({h: v for h, v in zip(headers, r)})
+        values = [_value_to_python(v) for v in (r if isinstance(r, (list, tuple)) else [r])]
+        if columns:
+            rows.append({h: v for h, v in zip(columns, values)})
         else:
-            rows.append({"row": r})
+            rows.append({"row": values[0] if len(values) == 1 else values})
     elapsed_ms = (time.perf_counter() - started) * 1000.0
     return QueryResult(rows=rows, ms=elapsed_ms, cypher=cypher)
 
@@ -80,6 +150,12 @@ def _run(graph: FalkorDBGraph, cypher: str, params: dict[str, Any] | None = None
 # ---------------------------------------------------------------------------
 # Critical queries (CONTRACTS §4)
 # ---------------------------------------------------------------------------
+
+
+# The labels that carry an ``embedding`` property and therefore a vector
+# index. Anything else is rejected, so the label is never interpolated
+# from unvalidated input.
+EMBEDDED_LABELS = ("Document", "Ticket", "Message", "Decision", "Fact", "Episode")
 
 
 def q_vector_entry(
@@ -99,15 +175,41 @@ def q_vector_entry(
 
     Demo question
         All 5 (every question starts by finding an entry node).
+
+    Notes
+        FalkorDB's signature is
+        ``db.idx.vector.queryNodes(label, attribute, k, query)`` and the
+        query vector must be wrapped in ``vecf32()``.
     """
-    label_clause = ":" + "|".join(labels) if labels else ""
+    allowed = [l for l in (labels or list(EMBEDDED_LABELS)) if l in EMBEDDED_LABELS]
+    if not allowed:
+        allowed = list(EMBEDDED_LABELS)
+
+    want = int(k)
+    # `db.idx.vector.queryNodes` takes ONE label, so query each label and
+    # merge by score. (A pipe-joined label string is rejected.)
     cypher = (
-        f"CALL db.idx.vector.queryNodes({label_clause!r}, 'embedding', 384, $vec, "
-        f"{{topK: $k}}) YIELD node, score "
-        "RETURN node, score ORDER BY score ASC LIMIT $k"
+        "CALL db.idx.vector.queryNodes($label, 'embedding', $k, vecf32($vec)) "
+        "YIELD node, score "
+        "RETURN node, score ORDER BY score DESC"
     )
-    params: dict[str, Any] = {"vec": embedding, "k": int(k)}
-    return _run(graph, cypher, params)
+    started = time.perf_counter()
+    merged: list[tuple[dict[str, Any], float]] = []
+    for label in allowed:
+        try:
+            raw = graph.query(cypher, params={"label": label, "vec": embedding, "k": want})
+        except Exception:
+            continue
+        for row in getattr(raw, "result_set", []) or []:
+            if not isinstance(row, (list, tuple)) or len(row) < 2:
+                continue
+            merged.append((_value_to_python(row[0]), float(row[1])))
+    # Descending score, then truncate to k.
+    merged.sort(key=lambda kv: kv[1], reverse=True)
+    merged = merged[:want]
+    elapsed_ms = (time.perf_counter() - started) * 1000.0
+    rows = [{"node": node, "score": score} for node, score in merged]
+    return QueryResult(rows=rows, ms=elapsed_ms, cypher=cypher)
 
 
 def q_find_owner(graph: FalkorDBGraph, entity_id: str) -> QueryResult:
@@ -153,23 +255,19 @@ def q_find_experts(graph: FalkorDBGraph, topic: str, top_k: int = 5) -> QueryRes
     Demo question
         Ownership vs. expertise gap (Q3).
     """
+    # Rank people by weighted involvement with entities whose id/name
+    # matches the topic. Written to avoid `count{}` subqueries and map
+    # projections, which this engine rejects.
     cypher = (
-        # 1. Vector search gives us candidate anchor entities.
-        "CALL db.idx.vector.queryNodes('', 'embedding', 384, $topic_vec, "
-        "{topK: 10}) YIELD node AS anchor "
-        # 2. Find people who AUTHORED something MENTIONING the anchor
-        #    OR WORKED_ON the anchor directly. Weight: AUTHORED=2, WORKED_ON=1.
-        "OPTIONAL MATCH (p:Person)-[:AUTHORED]->(a)-[:MENTIONS]->(anchor) "
-        "WITH p, anchor, collect(DISTINCT a) AS authored "
-        "OPTIONAL MATCH (p)-[:WORKED_ON]->(anchor) "
-        "WITH p, anchor, authored, "
-        "     count{(p)-[:WORKED_ON]->(anchor)} AS worked_on "
-        "WITH p, "
-        "     coalesce(size(authored), 0) * 2 + coalesce(worked_on, 0) AS score "
-        "WHERE score > 0 "
+        "MATCH (p:Person)-[r:AUTHORED|WORKED_ON]->(n) "
+        "WHERE toLower(coalesce(n.id, ''))   CONTAINS toLower($topic) "
+        "   OR toLower(coalesce(n.name, '')) CONTAINS toLower($topic) "
+        "   OR toLower(coalesce(n.title, '')) CONTAINS toLower($topic) "
+        "   OR toLower(coalesce(n.text, '')) CONTAINS toLower($topic) "
+        "WITH p, sum(CASE WHEN type(r) = 'AUTHORED' THEN 2 ELSE 1 END) AS score "
         "RETURN p, score ORDER BY score DESC LIMIT $k"
     )
-    return _run(graph, cypher, {"topic_vec": topic, "k": int(top_k)})
+    return _run(graph, cypher, {"topic": topic, "k": int(top_k)})
 
 
 def q_trace_decision(graph: FalkorDBGraph, decision_id: str) -> QueryResult:
@@ -213,12 +311,17 @@ def q_impact_analysis(graph: FalkorDBGraph, service_id: str, max_depth: int = 4)
     Demo question
         Q2 (auth blast radius) and Q5 (multi-agent handoff).
     """
+    # FalkorDB rejects a parameter inside a variable-length path range
+    # ("Encountered unhandled type in inlined properties"), so the depth
+    # must be an inline integer literal. It is coerced with int() and
+    # clamped, so there is no injection surface.
+    depth = max(1, min(int(max_depth), 8))
     cypher = (
-        "MATCH (s:Service {id: $sid})<-[:DEPENDS_ON*1..$depth]-(dep:Service) "
+        f"MATCH (s:Service {{id: $sid}})<-[:DEPENDS_ON*1..{depth}]-(dep:Service) "
         "OPTIONAL MATCH (owner)-[:OWNS]->(dep) "
-        "RETURN DISTINCT dep, owner"
+        "RETURN DISTINCT dep AS dep, owner AS owner"
     )
-    return _run(graph, cypher, {"sid": service_id, "depth": int(max_depth)})
+    return _run(graph, cypher, {"sid": service_id})
 
 
 def q_shortest_path(graph: FalkorDBGraph, a_id: str, b_id: str) -> QueryResult:
@@ -234,10 +337,18 @@ def q_shortest_path(graph: FalkorDBGraph, a_id: str, b_id: str) -> QueryResult:
     Demo question
         Q3 (relationship between entities).
     """
+    # FalkorDB requires shortestPath() in a WITH/RETURN clause AND does
+    # not support undirected traversal. algo.SPpaths with
+    # relDirection='both' gives the intended behaviour.
     cypher = (
         "MATCH (a {id: $a}), (b {id: $b}) "
-        "MATCH p = shortestPath((a)-[*..8]-(b)) "
-        "RETURN p, length(p) AS hops"
+        "CALL algo.SPpaths({ "
+        "  sourceNode: a, "
+        "  targetNode: b, "
+        "  relDirection: 'both', "
+        "  pathCount: 1 "
+        "}) YIELD path, pathWeight "
+        "RETURN path, pathWeight"
     )
     return _run(graph, cypher, {"a": a_id, "b": b_id})
 
@@ -260,12 +371,14 @@ def q_centrality(
     Demo question
         Hub analysis (mentioned in the schema rationale).
     """
-    rel_clause = f"(:{label})-[:{rel}]->" if rel else f"(:{label})-[]->"
+    # FalkorDB's signature is algo.pageRank(label, relationshipType) with
+    # both as strings (or null for "any"). It is NOT a pattern.
     cypher = (
-        f"CALL algo.pageRank({rel_clause}(m), 'm') YIELD node, score "
+        "CALL algo.pageRank($label, $rel) YIELD node, score "
         "RETURN node, score ORDER BY score DESC LIMIT $k"
     )
-    return _run(graph, cypher, {"k": int(top_k)})
+    params: dict[str, Any] = {"label": label, "rel": rel, "k": int(top_k)}
+    return _run(graph, cypher, params)
 
 
 def q_recall_facts(
@@ -288,10 +401,13 @@ def q_recall_facts(
     Demo question
         Q4 (changed deadline) and Q1 (every session starts with recall).
     """
+    # FalkorDB signature: queryNodes(label, attribute, k, vecf32(query)).
+    # The status filter is applied after YIELD so the alias exists.
     status_filter = "" if include_history else "WHERE f.status = 'active' "
     cypher = (
-        f"CALL db.idx.vector.queryNodes('Fact', 'embedding', 384, $vec, "
-        f"{{topK: 20}}) YIELD node AS f {status_filter}"
+        "CALL db.idx.vector.queryNodes('Fact', 'embedding', 50, vecf32($vec)) "
+        "YIELD node AS f, score "
+        f"{status_filter}"
         "OPTIONAL MATCH (f)-[:ABOUT]->(anchor) "
         "WITH f, collect(DISTINCT anchor) AS anchors "
         "RETURN f, anchors ORDER BY f.valid_from DESC LIMIT $k"

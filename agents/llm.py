@@ -31,6 +31,9 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+# Ensure .env is loaded before provider keys are read.
+import config as _config  # noqa: F401
+
 log = logging.getLogger("orgmind.llm")
 
 __all__ = [

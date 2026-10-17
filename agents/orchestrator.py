@@ -31,6 +31,9 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
+# Load .env first: the constants below read os.environ at import time.
+import config as _config  # noqa: F401
+
 # Importing the tools package registers every tool in REGISTRY as a
 # side effect. Without this, the orchestrator would see an empty tool
 # catalogue and fail every call with "unknown tool".

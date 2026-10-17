@@ -30,6 +30,10 @@ import threading
 from typing import List, Optional
 from urllib.parse import unquote, urlparse
 
+# Load .env before reading any configuration. This is the lowest layer of
+# the project, so importing it guarantees every caller sees the settings.
+import config as _config  # noqa: F401  (side effect: loads .env)
+
 log = logging.getLogger("orgmind.graph.client")
 
 # FalkorDB is a runtime dep declared in pyproject.toml. We import it here

@@ -113,13 +113,23 @@ def test_find_owner_unknown_returns_empty():
 def test_find_experts_ranks_by_weighted_edges():
     from graph.queries import q_find_experts
 
-    r = q_find_experts(_acme(), [0.0] * 384, top_k=5)
+    r = q_find_experts(_acme(), "billing", top_k=5)
     assert r.rows, "expected at least one expert"
     scores = [row["score"] for row in r.rows]
     assert scores == sorted(scores, reverse=True), "experts must be ranked"
-    # The planted expert on svc_billing has the most WORKED_ON edges to it.
     ids = {row["p"]["id"] for row in r.rows}
     assert ids, "rows must carry a Person node"
+
+
+def test_find_experts_filters_by_topic():
+    from graph.queries import q_find_experts
+
+    # An id-shaped topic must narrow the result set.
+    r = q_find_experts(_acme(), "svc_billing", top_k=10)
+    assert r.rows
+    # Everyone returned must have actually worked on or authored
+    # something whose id mentions billing.
+    assert all(row["score"] > 0 for row in r.rows)
 
 
 # ---------------------------------------------------------------------------
@@ -148,7 +158,8 @@ def test_shortest_path_reaches_decision():
 
     r = q_shortest_path(_acme(), "person_bilal_eze", "dec_postgres")
     assert r.rows, "expected a path"
-    assert r.rows[0]["hops"] >= 1
+    assert r.rows[0]["pathWeight"] >= 1
+    assert r.rows[0]["path"], "path must carry nodes"
 
 
 def test_shortest_path_unknown_node_returns_empty():

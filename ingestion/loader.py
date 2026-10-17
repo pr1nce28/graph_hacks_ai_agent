@@ -72,39 +72,88 @@ def _props(node: dict[str, Any], label: str) -> dict[str, Any]:
     return props
 
 
-def _ensure_index(graph: Any, label: str) -> None:
-    """Idempotently create an index on id. FalkorDB API is best-effort."""
-    try:
-        graph.query(f"CREATE INDEX ON :{label}(id)")
-    except Exception:  # pragma: no cover - server already indexed
-        pass
+# Labels whose nodes carry an `embedding` property.
+_EMBEDDED = {"Document", "Ticket", "Message", "Decision", "Fact", "Episode"}
 
 
-def load_tenant(tenant: str, payload: dict[str, Any]) -> LoadResult:
-    """Load one tenant payload into its graph. Idempotent."""
+def _embedding_text(label: str, props: dict[str, Any]) -> str:
+    """Build the text that gets embedded for a node.
+
+    Different labels carry their meaning in different fields; pick the
+    ones an agent would search on.
+    """
+    parts = [
+        props.get("title"),
+        props.get("name"),
+        props.get("subject"),
+        props.get("summary"),
+        props.get("text"),
+    ]
+    return ". ".join(str(p) for p in parts if p)
+
+
+def load_tenant(tenant: str, payload: dict[str, Any], embed: bool = True) -> LoadResult:
+    """Load one tenant payload into its graph. Idempotent.
+
+    Args:
+        tenant: graph name.
+        payload: synthetic tenant payload.
+        embed: compute and store embeddings for the embedded labels.
+            Disable for a fast structural load; vector search will not
+            work until embeddings exist.
+    """
     started = time.perf_counter()
     graph = get_graph(tenant)
     nodes_added = 0
     edges_added = 0
 
-    # 1. Indexes (P1-A-01).
-    for label in set(_NODE_LABELS.values()):
-        _ensure_index(graph, label)
+    # 1. Indexes (P1-A-01): id indexes first so the MERGEs below can use
+    #    them, then the vector indexes once embeddings are in place.
+    from graph.schema import ensure_schema
+
+    ensure_schema(graph)
 
     # 2. Nodes.
     for key, label in _NODE_LABELS.items():
-        for n in payload.get(key, []):
+        rows = payload.get(key, [])
+        texts: list[str] = []
+        prepared: list[tuple[str, dict[str, Any]]] = []
+        for n in rows:
             props = _props(n, label)
             cid = props.pop("id", None)
             if not cid:
                 continue
-            cypher = (
-                f"MERGE (n:{label} {{id: $id}}) "
-                "ON CREATE SET n += $props "
-                "ON MATCH  SET n += $props "
-                "RETURN n"
-            )
-            graph.query(cypher, params={"id": cid, "props": props})
+            prepared.append((cid, props))
+            texts.append(_embedding_text(label, props) if label in _EMBEDDED else "")
+
+        # Compute embeddings in one batch where the label needs them.
+        vectors: list[list[float]] = []
+        if embed and label in _EMBEDDED and texts:
+            from graph.embeddings import embed_texts
+
+            vectors = embed_texts(texts)
+
+        for i, (cid, props) in enumerate(prepared):
+            if vectors:
+                # FalkorDB's vector index requires the `vecf32` type, not
+                # a plain list, so the embedding is set separately from
+                # the scalar properties.
+                cypher = (
+                    f"MERGE (n:{label} {{id: $id}}) "
+                    "ON CREATE SET n += $props "
+                    "ON MATCH  SET n += $props "
+                    "SET n.embedding = vecf32($emb) "
+                    "RETURN n"
+                )
+                graph.query(cypher, params={"id": cid, "props": props, "emb": vectors[i]})
+            else:
+                cypher = (
+                    f"MERGE (n:{label} {{id: $id}}) "
+                    "ON CREATE SET n += $props "
+                    "ON MATCH  SET n += $props "
+                    "RETURN n"
+                )
+                graph.query(cypher, params={"id": cid, "props": props})
             nodes_added += 1
 
     # 3. Edges. Different edge types use different key names: most use
