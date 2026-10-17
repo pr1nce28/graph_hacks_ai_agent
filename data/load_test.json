@@ -1,0 +1,32 @@
+{
+  "scenario": {
+    "sessions": 200,
+    "tenants": [
+      "org_acme",
+      "org_globex"
+    ],
+    "offline": true
+  },
+  "per_tenant": [
+    {
+      "sessions": 100,
+      "duration_s": 0.003,
+      "throughput_per_s": 35385.704,
+      "p50_ms": 20.11,
+      "p95_ms": 31.03,
+      "max_ms": 35.39,
+      "errors": 0,
+      "tenant": "org_acme"
+    },
+    {
+      "sessions": 100,
+      "duration_s": 0.003,
+      "throughput_per_s": 35385.704,
+      "p50_ms": 18.07,
+      "p95_ms": 29.21,
+      "max_ms": 34.78,
+      "errors": 0,
+      "tenant": "org_globex"
+    }
+  ]
+}
