@@ -44,6 +44,30 @@ ample for a demo.
 Keys from AI Studio may start with `AIza` or the newer `AQ.` prefix;
 both work.
 
+### Free-tier limits are tighter than they look
+
+Measured against a live free-tier key:
+
+| Limit | Value |
+|---|---|
+| Requests per minute | ~5 |
+| Requests **per day** | **20** |
+
+One agent turn costs at least two requests (plan, then answer), and a
+turn that uses several tools costs more. A few demo runs will exhaust a
+free key for the day — the API then returns `429` with a retry delay in
+the **hours**.
+
+What to do:
+
+* Set `LLM_PROVIDER=none` to work offline; demo mode exercises the real
+  graph with no API calls at all.
+* Space out live runs, or pick a different model in the console —
+  per-day quotas differ per model.
+* Enable billing for a key you intend to demo repeatedly.
+* OrgMind already retries a `429` using the delay the server suggests,
+  up to `GEMINI_MAX_RETRIES` (default 3).
+
 ## Anthropic — paid
 
 1. Open <https://console.anthropic.com/settings/keys>
