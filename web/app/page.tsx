@@ -67,6 +67,33 @@ export default function HomePage() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [theme, setTheme] = useState<"dark" | "spiderman">("dark");
+
+  useEffect(() => {
+    const saved = (localStorage.getItem("orgmind-theme") as "dark" | "spiderman") || "dark";
+    setTheme(saved);
+    const root = document.documentElement;
+    if (saved === "spiderman") {
+      root.classList.remove("dark");
+      root.classList.add("theme-spiderman");
+    } else {
+      root.classList.remove("theme-spiderman");
+      root.classList.add("dark");
+    }
+  }, []);
+
+  const handleThemeToggle = (newTheme: "dark" | "spiderman") => {
+    setTheme(newTheme);
+    localStorage.setItem("orgmind-theme", newTheme);
+    const root = document.documentElement;
+    if (newTheme === "spiderman") {
+      root.classList.remove("dark");
+      root.classList.add("theme-spiderman");
+    } else {
+      root.classList.remove("theme-spiderman");
+      root.classList.add("dark");
+    }
+  };
 
   useEffect(() => {
     void fetchInfo().then(setInfo);
@@ -160,18 +187,57 @@ export default function HomePage() {
     <main className="mx-auto flex min-h-screen max-w-7xl flex-col gap-4 px-6 py-4">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-50">
-            OrgMind
-          </h1>
-          <p className="text-sm text-slate-400">
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">
+              OrgMind
+            </h1>
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             Company Brain · FalkorDB · {info ? `phase ${info.phase}` : "phase ?"}
           </p>
         </div>
-        <div
-          className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-[11px] text-amber-300"
-          data-testid="synthetic-banner"
-        >
-          Synthetic demo data only — no real company information is stored.
+
+        <div className="flex flex-wrap items-center gap-3">
+          <div
+            className="rounded-full border px-3 py-1 text-[11px] transition-colors border-red-200 bg-red-50 text-red-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200/90"
+            data-testid="synthetic-banner"
+          >
+            Synthetic demo data only — no real company information is stored.
+          </div>
+
+          {/* Theme Toggle Button */}
+          <div
+            className="flex items-center rounded-full border p-0.5 text-xs transition-colors border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/80"
+            role="radiogroup"
+            aria-label="Theme selection"
+          >
+            <button
+              type="button"
+              onClick={() => handleThemeToggle("dark")}
+              className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
+                theme === "dark"
+                  ? "bg-slate-800 text-white shadow-sm"
+                  : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+              }`}
+              title="Dark Mode"
+            >
+              <span>🌙</span>
+              <span>Dark</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleThemeToggle("spiderman")}
+              className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
+                theme === "spiderman"
+                  ? "bg-[#e23636] text-white shadow-sm"
+                  : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+              }`}
+              title="Light Mode"
+            >
+              <span>☀️</span>
+              <span>Light</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -183,8 +249,9 @@ export default function HomePage() {
             error={error}
             onSend={handleSend}
             onCitationClick={setSelectedId}
+            theme={theme}
           />
-          <Timeline ticks={ticks} />
+          <Timeline ticks={ticks} theme={theme} />
         </div>
 
         <div className="flex h-[60vh] flex-col gap-3 lg:h-[70vh]">
@@ -192,23 +259,25 @@ export default function HomePage() {
             paths={flatPaths}
             onSelect={setSelectedId}
             selectedId={selectedId}
+            theme={theme}
           />
           <NodeDetail
             nodeId={selectedId}
             label={selectedNode?.label}
             name={selectedNode?.name}
+            theme={theme}
           />
         </div>
 
         <aside className="flex flex-col gap-3">
-          <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-sm">
-            <label className="block text-xs uppercase tracking-wider text-slate-400">
+          <div className="rounded-lg border p-3 text-sm transition-colors border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
+            <label className="block text-xs uppercase tracking-wider font-medium text-slate-500 dark:text-slate-400">
               Tenant
             </label>
             <select
               value={tenant}
               onChange={(e) => setTenant(e.target.value)}
-              className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm"
+              className="mt-1 w-full rounded border px-2.5 py-1.5 text-sm transition-colors border-slate-300 bg-white text-slate-800 focus:border-[#e23636] focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:focus:border-blue-500"
               data-testid="tenant-select"
             >
               {tenants.length === 0 && <option value={tenant}>{tenant}</option>}
@@ -219,14 +288,17 @@ export default function HomePage() {
               ))}
             </select>
           </div>
-          <MemoryInspector events={memory} />
-          <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-400">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+          <MemoryInspector events={memory} theme={theme} />
+          <div className="rounded-lg border p-3 text-xs transition-colors border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Tracks
             </h3>
             <ul className="mt-2 space-y-1">
               {(info?.tracks ?? []).map((t) => (
-                <li key={t} className="rounded bg-slate-950/60 px-2 py-1">
+                <li
+                  key={t}
+                  className="rounded px-2 py-1 font-mono text-[11px] transition-colors border border-slate-100 bg-slate-50 text-slate-700 dark:border-transparent dark:bg-slate-950/60 dark:text-slate-300"
+                >
                   {t}
                 </li>
               ))}
