@@ -56,6 +56,9 @@ except ImportError:  # pragma: no cover
 DEFAULT_MODEL = os.environ.get("MODEL", "claude-sonnet-4-5")
 MAX_TOOL_STEPS = int(os.environ.get("MAX_TOOL_STEPS", "8"))
 TOOL_TIMEOUT_S = float(os.environ.get("TOOL_TIMEOUT_S", "10"))
+# anthropic | gemini | auto | none. In auto we prefer Anthropic, then
+# Gemini, then fall back to deterministic demo mode.
+PROVIDER_NAME = os.environ.get("LLM_PROVIDER", "auto")
 
 # Anything that looks like a node id in square brackets: [svc_auth], [dec_postgres].
 _CITATION_RE = re.compile(r"\[([A-Za-z_][\w]*)\]")
@@ -185,6 +188,11 @@ class Orchestrator:
     api_key: Optional[str] = None
     system_prompt_path: str = "agents/prompts/orchestrator.md"
     tenant: str = "org_acme"
+    # Provider selection. ``provider_name`` is an env-style key
+    # (anthropic | gemini | auto | none); ``provider`` lets a caller
+    # inject an instance directly (used by tests).
+    provider_name: str = PROVIDER_NAME
+    provider: Any = None
     # Mutable state per turn.
     _collected_ids: set[str] = field(default_factory=set, init=False)
 
@@ -234,26 +242,23 @@ class Orchestrator:
             except Exception as exc:
                 log.info("recall at session start skipped: %s", exc)
 
-        try:
-            import anthropic  # type: ignore
-        except ImportError:
+        # Pick a provider: explicit, auto-detected, or none (demo mode).
+        provider = self.provider
+        if provider is None and self.provider_name != "none":
+            from agents.llm import get_provider
+
+            provider = get_provider(self.provider_name)
+        if provider is None:
             return self._demo_turn(
                 question,
-                reason="anthropic SDK not installed",
+                reason=(
+                    "no LLM provider available — set ANTHROPIC_API_KEY or "
+                    "GEMINI_API_KEY (and LLM_PROVIDER=anthropic|gemini|auto)"
+                ),
                 seen_tools=seen_tools,
                 session_id=session_id,
             )
 
-        api_key = self.api_key or os.environ.get("ANTHROPIC_API_KEY")
-        if not api_key:
-            return self._demo_turn(
-                question,
-                reason="ANTHROPIC_API_KEY not set",
-                seen_tools=seen_tools,
-                session_id=session_id,
-            )
-
-        client = anthropic.Anthropic(api_key=api_key)
         system_prompt = self._load_system_prompt()
         tools = [t.tool_schema for t in REGISTRY]
 
@@ -261,34 +266,28 @@ class Orchestrator:
 
         final_text = ""
         for step in range(self.max_tool_steps):
-            response = client.messages.create(
-                model=self.model,
-                max_tokens=1024,
-                system=system_prompt,
-                tools=tools,
-                messages=messages,
-            )
+            turn = provider.complete(system_prompt, messages, tools)
+            final_text += turn.text
 
-            # Walk the response blocks. Anything not tool_use is final text.
-            tool_uses = []
-            for block in response.content:
-                btype = getattr(block, "type", None)
-                if btype == "text":
-                    final_text += getattr(block, "text", "")
-                elif btype == "tool_use":
-                    tool_uses.append(block)
-
-            if not tool_uses:
-                # No more tool calls: stop the loop.
+            if not turn.wants_tools:
+                # No more tool calls: the model is done planning.
                 break
 
-            # Append the assistant turn and feed back tool results.
-            messages.append({"role": "assistant", "content": response.content})
+            # Record the assistant turn in the neutral format both
+            # providers understand.
+            assistant_blocks: list[dict[str, Any]] = []
+            if turn.text:
+                assistant_blocks.append({"type": "text", "text": turn.text})
+            for tc in turn.tool_calls:
+                assistant_blocks.append(
+                    {"type": "tool_use", "id": tc.id, "name": tc.name, "args": tc.args}
+                )
+            messages.append({"role": "assistant", "content": assistant_blocks})
 
             tool_results: list[dict[str, Any]] = []
-            for tu in tool_uses:
-                name = tu.name
-                args = tu.input or {}
+            for tc in turn.tool_calls:
+                name = tc.name
+                args = tc.args
                 self._emit(
                     OrchestratorEvent(
                         type="step",
@@ -310,7 +309,8 @@ class Orchestrator:
                 tool_results.append(
                     {
                         "type": "tool_result",
-                        "tool_use_id": tu.id,
+                        "tool_use_id": tc.id,
+                        "name": name,
                         "content": _serialise_tool_result(result),
                     }
                 )
@@ -451,18 +451,20 @@ class Orchestrator:
         if not script:
             answer = (
                 "[demo mode] No scripted plan matches that question. "
-                "Set ANTHROPIC_API_KEY to let the orchestrator plan freely. "
+                "Set ANTHROPIC_API_KEY or GEMINI_API_KEY to let the "
+                "orchestrator plan freely. "
                 f"({reason})"
             )
         else:
             cites = " ".join(f"[{i}]" for i in sorted(self._collected_ids)[:6])
             answer = (
-                "**Demo mode** (no Claude key set): the orchestrator ran a "
+                "**Demo mode** (no LLM key set): the orchestrator ran a "
                 "deterministic plan against the live graph.\n\n"
                 + "\n".join(f"- {s}" for s in tool_summaries if s)
                 + f"\n\nCites: {cites}\n\n"
-                f"_Set `ANTHROPIC_API_KEY` to replace this with model-planned "
-                f"reasoning ({reason})._"
+                "_Set `ANTHROPIC_API_KEY` or `GEMINI_API_KEY` (or "
+                "`LLM_PROVIDER=gemini`) to replace this with model-planned "
+                f"reasoning. ({reason})_"
             )
 
         clean_text, dropped = _enforce_citations(answer, self._collected_ids)
