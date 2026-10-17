@@ -108,6 +108,10 @@ DEMO_SCRIPTS: list[tuple[tuple[str, ...], list[tuple[str, dict]]]] = [
             ("create_task", {"goal": "Notify owners of the auth change"}),
         ],
     ),
+    (
+        ("discuss", "last time", "episode", "history", "previous session", "recall"),
+        [("recall", {"query": "recent session history", "include_history": True})],
+    ),
 ]
 
 
@@ -449,11 +453,33 @@ class Orchestrator:
             tool_summaries.append(_summarise_tool_result(name, result))
 
         if not script:
+            # No script matches. Fall back to a recall so the turn still
+            # shows something real from the graph, then say honestly
+            # that free planning needs a key.
+            try:
+                fallback = self._invoke_tool_with_timeout(
+                    "recall", {"query": question, "include_history": True}
+                )
+                fallback_path = fallback.get("path", {"nodes": [], "edges": []})
+                self._harvest_path(fallback)
+                self._emit(
+                    OrchestratorEvent(
+                        type="path",
+                        payload={"tool": "recall", "path": fallback_path},
+                    )
+                )
+                seen_tools.append("recall")
+                tool_summaries.append(_summarise_tool_result("recall", fallback))
+            except Exception as exc:
+                log.info("demo fallback recall skipped: %s", exc)
+
             answer = (
-                "[demo mode] No scripted plan matches that question. "
-                "Set ANTHROPIC_API_KEY or GEMINI_API_KEY to let the "
-                "orchestrator plan freely. "
-                f"({reason})"
+                "[demo mode] No scripted plan matches that question, so I "
+                "ran a memory recall instead.\n\n"
+                + ("\n".join(f"- {s}" for s in tool_summaries if s) or "- (nothing in memory)")
+                + "\n\n_Set `ANTHROPIC_API_KEY` or `GEMINI_API_KEY` so the "
+                "orchestrator can plan any question freely. "
+                f"({reason})_"
             )
         else:
             cites = " ".join(f"[{i}]" for i in sorted(self._collected_ids)[:6])

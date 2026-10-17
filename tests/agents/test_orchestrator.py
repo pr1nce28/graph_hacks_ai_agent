@@ -88,8 +88,9 @@ def test_orchestrator_handles_missing_anthropic_sdk(monkeypatch):
             sys.modules.pop("anthropic", None)
 
 
-def test_demo_plan_for_unknown_question_says_so(monkeypatch):
-    """A question that matches no demo script must say so honestly."""
+def test_demo_plan_for_unknown_question_falls_back_to_recall(monkeypatch):
+    """A question that matches no demo script must say so honestly, and
+    fall back to a real memory recall rather than answering blindly."""
     import graph.client as client
 
     monkeypatch.setenv("USE_DEV_GRAPH", "true")
@@ -99,7 +100,24 @@ def test_demo_plan_for_unknown_question_says_so(monkeypatch):
     orch = Orchestrator()
     result = orch.call_turn("What is the airspeed velocity of a swallow?")
     assert "No scripted plan" in result["text"]
-    assert result["tools_called"] == []
+    # The fallback runs a real recall so the turn still shows graph state.
+    assert result["tools_called"] == ["recall"]
+    # And it must be explicit that free planning needs a key.
+    assert "ANTHROPIC_API_KEY" in result["text"] or "GEMINI_API_KEY" in result["text"]
+
+
+def test_demo_plan_matches_the_history_question(monkeypatch):
+    """'What did we discuss last time?' must hit the history script."""
+    import graph.client as client
+
+    monkeypatch.setenv("USE_DEV_GRAPH", "true")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    client._dev_graphs.clear()
+
+    orch = Orchestrator()
+    result = orch.call_turn("What did we discuss last time?")
+    assert "recall" in result["tools_called"]
+    assert "No scripted plan" not in result["text"]
 
 
 def test_orchestrator_max_tool_steps_clamped_by_env(monkeypatch):
