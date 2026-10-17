@@ -107,6 +107,11 @@ The MCP server is a real transport, not a wrapper: the same registry
 drives both paths, and a test asserts the MCP route does not silently
 delegate to the in-process one. See **`docs/MCP.md`**.
 
+**The planner** is pluggable across Claude and Gemini. Without a key the
+orchestrator runs *demo mode*: deterministic plans executed against the
+real graph, so the app is fully demonstrable with no API key. Add one to
+get model-planned answers — see **`docs/LLM_KEYS.md`**.
+
 | Tool | Purpose | Track |
 |---|---|---|
 | `search_entities(query, labels?, k)` | Vector search for entry nodes | 1, 3 |
