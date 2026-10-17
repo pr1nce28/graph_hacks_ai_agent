@@ -37,6 +37,18 @@ __all__ = ["Orchestrator", "OrchestratorEvent"]
 
 log = logging.getLogger("orgmind.orchestrator")
 
+# Memory layer hooks (P3-A-03, P3-A-04). They are wrapped so a missing
+# dependency or import error never kills the orchestrator.
+try:  # pragma: no cover - exercised only when memory layer available
+    from memory import coordination as _coord
+    from memory import episodic as _episodic
+    from memory import procedural as _procedural
+    from memory import semantic as _semantic
+    _MEMORY_OK = True
+except ImportError:  # pragma: no cover
+    _coord = _episodic = _procedural = _semantic = None  # type: ignore
+    _MEMORY_OK = False
+
 DEFAULT_MODEL = os.environ.get("MODEL", "claude-sonnet-4-5")
 MAX_TOOL_STEPS = int(os.environ.get("MAX_TOOL_STEPS", "8"))
 TOOL_TIMEOUT_S = float(os.environ.get("TOOL_TIMEOUT_S", "10"))
@@ -140,30 +152,55 @@ class Orchestrator:
         """Run one full question turn. Returns a final ``answer`` event payload."""
         self._collected_ids = set()
         seen_tools: list[str] = []
+        session_id = session_id or "sess_default"
+
+        # Make sure the default agent set exists in the graph so
+        # handoffs and task assignment have somewhere to land.
+        if _MEMORY_OK:
+            try:
+                _coord.ensure_agents(self.tenant)
+            except Exception as exc:
+                log.info("ensure_agents skipped: %s", exc)
 
         # P3-B-04: recall at session start using the question itself.
-        try:
-            from tools.memory_tools import recall
-
-            recall_result = recall(question, tenant=self.tenant, include_history=False)
-            self._harvest_path(recall_result)
-            self._emit(
-                OrchestratorEvent(
-                    type="memory",
-                    payload={"op": "recall", "rows": recall_result.get("result", {}).get("rows", [])},
+        if _MEMORY_OK:
+            try:
+                recall_result = _semantic.recall(
+                    query=question,
+                    tenant=self.tenant,
+                    include_history=False,
                 )
-            )
-        except Exception as exc:
-            log.info("recall at session start skipped: %s", exc)
+                self._harvest_path(recall_result)
+                self._emit(
+                    OrchestratorEvent(
+                        type="memory",
+                        payload={
+                            "op": "recall",
+                            "rows": recall_result.get("result", {}).get("rows", []),
+                        },
+                    )
+                )
+            except Exception as exc:
+                log.info("recall at session start skipped: %s", exc)
 
         try:
             import anthropic  # type: ignore
         except ImportError:
-            return self._stub_response(question, reason="anthropic SDK not installed")
+            return self._stub_response(
+                question,
+                reason="anthropic SDK not installed",
+                seen_tools=seen_tools,
+                session_id=session_id,
+            )
 
         api_key = self.api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
-            return self._stub_response(question, reason="ANTHROPIC_API_KEY not set")
+            return self._stub_response(
+                question,
+                reason="ANTHROPIC_API_KEY not set",
+                seen_tools=seen_tools,
+                session_id=session_id,
+            )
 
         client = anthropic.Anthropic(api_key=api_key)
         system_prompt = self._load_system_prompt()
@@ -244,6 +281,29 @@ class Orchestrator:
         }
         self._emit(OrchestratorEvent(type="answer", payload=answer_payload))
         self._emit(OrchestratorEvent(type="done"))
+
+        # P3-A-03: persist this turn as an Episode, and P3-A-04 record
+        # the successful tool sequence as a Procedure.
+        if _MEMORY_OK:
+            try:
+                _episodic.summarise_session(
+                    tenant=self.tenant,
+                    session_id=session_id,
+                    summary=clean_text[:280],
+                    touched_ids=sorted(self._collected_ids),
+                )
+            except Exception as exc:
+                log.info("summarise_session skipped: %s", exc)
+            if seen_tools:
+                try:
+                    _procedural.record_procedure(
+                        tenant=self.tenant,
+                        name=f"turn:{session_id}",
+                        steps=seen_tools,
+                    )
+                except Exception as exc:
+                    log.info("record_procedure skipped: %s", exc)
+
         return answer_payload
 
     # ------------------------------------------------------------------
@@ -293,7 +353,13 @@ class Orchestrator:
             if nid and nid != "n/a":
                 self._collected_ids.add(nid)
 
-    def _stub_response(self, question: str, reason: str) -> dict[str, Any]:
+    def _stub_response(
+        self,
+        question: str,
+        reason: str,
+        seen_tools: list[str] | None = None,
+        session_id: str | None = None,
+    ) -> dict[str, Any]:
         """Offline mode: explain why the loop did not run and emit ``done``."""
         answer = (
             f"[stub] {reason}. Install `anthropic` and set `ANTHROPIC_API_KEY` "
@@ -301,7 +367,18 @@ class Orchestrator:
         )
         self._emit(OrchestratorEvent(type="answer", payload={"text": answer, "citations": []}))
         self._emit(OrchestratorEvent(type="done"))
-        return {"text": answer, "citations": [], "tools_called": [], "dropped_citations": []}
+        # Persist the stub turn too so episodic memory still has a record.
+        if _MEMORY_OK and seen_tools is not None:
+            try:
+                _episodic.summarise_session(
+                    tenant=self.tenant,
+                    session_id=session_id or "sess_default",
+                    summary=answer[:280],
+                    touched_ids=sorted(self._collected_ids),
+                )
+            except Exception as exc:
+                log.info("summarise_session (stub) skipped: %s", exc)
+        return {"text": answer, "citations": [], "tools_called": seen_tools or [], "dropped_citations": []}
 
 
 def _serialise_tool_result(result: dict[str, Any]) -> str:
