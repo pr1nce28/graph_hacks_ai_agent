@@ -55,11 +55,18 @@ __all__ = [
 
 @dataclass
 class ToolCall:
-    """A model's request to run a tool."""
+    """A model's request to run a tool.
+
+    ``meta`` carries opaque, provider-specific data that must be echoed
+    back on the next request. Gemini 3.x requires the
+    ``thought_signature`` that accompanies a function call; Anthropic
+    has no equivalent and ignores this.
+    """
 
     id: str
     name: str
     args: dict[str, Any] = field(default_factory=dict)
+    meta: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -195,6 +202,9 @@ class AnthropicProvider(Provider):
                             }
                         )
                     elif b.get("type") == "tool_use":
+                        # `meta` is neutral-only (it carries Gemini's
+                        # thought_signature); Anthropic rejects unknown
+                        # fields.
                         new_blocks.append(
                             {
                                 "type": "tool_use",
@@ -246,7 +256,8 @@ class GeminiProvider(Provider):
             or os.environ.get("GEMINI_API_KEY")
             or os.environ.get("GOOGLE_API_KEY")
         )
-        self.model = model or os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+        # gemini-2.0-flash has been retired by the API; 3.8-flash is current.
+        self.model = model or os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 
     def available(self) -> bool:
         if not self.api_key:
@@ -258,7 +269,27 @@ class GeminiProvider(Provider):
         except ImportError:
             return False
 
+    # The Gemini free tier allows only ~5 requests/minute, and one agent
+    # turn costs at least two (plan + answer), so a 429 is expected
+    # rather than exceptional. Retry with the delay the server suggests.
+    MAX_RETRIES = int(os.environ.get("GEMINI_MAX_RETRIES", "3"))
+
+    @staticmethod
+    def _retry_delay_s(exc: Exception, attempt: int) -> float:
+        """Seconds to wait before retrying a 429; -1 if not retryable."""
+        code = getattr(exc, "code", None)
+        if code != 429 and "429" not in str(exc):
+            return -1.0
+        import re
+
+        m = re.search(r"retryDelay['\"]?\s*:\s*['\"]?(\d+)", str(exc))
+        if m:
+            return min(float(m.group(1)), 70.0)
+        return min(2.0 ** attempt, 30.0)
+
     def complete(self, system, messages, tools, max_tokens=1024) -> TurnResult:
+        import time
+
         from google import genai  # type: ignore
         from google.genai import types  # type: ignore
 
@@ -295,21 +326,32 @@ class GeminiProvider(Provider):
                 continue
             if role == "assistant" and isinstance(content, list):
                 # Neutral assistant blocks: text + tool_use.
+                #
+                # Gemini 3.x requires the thought_signature that came
+                # with a function call to be echoed back verbatim, or it
+                # rejects the request with INVALID_ARGUMENT. It rides in
+                # the neutral block's `meta` so this adapter stays the
+                # only place that knows about it.
                 parts = []
                 for block in content:
                     if block.get("type") == "text":
-                        parts.append({"text": block.get("text", "")})
+                        parts.append(types.Part(text=block.get("text", "")))
                     elif block.get("type") == "tool_use":
+                        meta = block.get("meta") or {}
+                        sig = meta.get("thought_signature")
+                        fc = types.FunctionCall(
+                            name=block.get("name", ""),
+                            args=block.get("args", {}),
+                        )
+                        if block.get("id"):
+                            fc.id = block["id"]
                         parts.append(
-                            {
-                                "function_call": {
-                                    "name": block.get("name", ""),
-                                    "args": block.get("args", {}),
-                                }
-                            }
+                            types.Part(function_call=fc, thought_signature=sig)
+                            if sig
+                            else types.Part(function_call=fc)
                         )
                 if parts:
-                    contents.append({"role": "model", "parts": parts})
+                    contents.append(types.Content(role="model", parts=parts))
                 continue
 
         config = types.GenerateContentConfig(
@@ -317,27 +359,61 @@ class GeminiProvider(Provider):
             tools=_tools_for_gemini(tools),
             max_output_tokens=max_tokens,
         )
-        resp = client.models.generate_content(
-            model=self.model,
-            contents=contents,
-            config=config,
-        )
+
+        resp = None
+        for attempt in range(self.MAX_RETRIES + 1):
+            try:
+                resp = client.models.generate_content(
+                    model=self.model,
+                    contents=contents,
+                    config=config,
+                )
+                break
+            except Exception as exc:
+                delay = self._retry_delay_s(exc, attempt)
+                if delay < 0 or attempt >= self.MAX_RETRIES:
+                    raise
+                log.warning(
+                    "gemini rate-limited (429); retrying in %.1fs (attempt %d/%d)",
+                    delay,
+                    attempt + 1,
+                    self.MAX_RETRIES,
+                )
+                time.sleep(delay)
+        if resp is None:  # pragma: no cover - loop always sets or raises
+            raise RuntimeError("gemini: no response after retries")
 
         text = ""
         calls: list[ToolCall] = []
-        # google-genai exposes .function_calls and .text conveniences.
-        for i, fc in enumerate(getattr(resp, "function_calls", None) or []):
-            calls.append(
-                ToolCall(
-                    id=f"gemini_call_{i}",
-                    name=getattr(fc, "name", ""),
-                    args=dict(getattr(fc, "args", {}) or {}),
+        # Walk the raw parts so we can capture each function call's
+        # thought_signature alongside it.
+        candidates = getattr(resp, "candidates", None) or []
+        for cand in candidates:
+            cand_content = getattr(cand, "content", None)
+            for part in getattr(cand_content, "parts", None) or []:
+                fc = getattr(part, "function_call", None)
+                if fc is None:
+                    t = getattr(part, "text", None)
+                    if t:
+                        text += t
+                    continue
+                sig = getattr(part, "thought_signature", None)
+                meta: dict[str, Any] = {}
+                if sig is not None:
+                    meta["thought_signature"] = sig
+                calls.append(
+                    ToolCall(
+                        id=getattr(fc, "id", None) or f"gemini_call_{len(calls)}",
+                        name=getattr(fc, "name", ""),
+                        args=dict(getattr(fc, "args", {}) or {}),
+                        meta=meta,
+                    )
                 )
-            )
-        try:
-            text = resp.text or ""
-        except Exception:
-            text = ""
+        if not text:
+            try:
+                text = resp.text or ""
+            except Exception:
+                text = ""
         return TurnResult(text=text, tool_calls=calls)
 
 

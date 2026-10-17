@@ -267,7 +267,7 @@ class Orchestrator:
             )
 
         system_prompt = self._load_system_prompt()
-        tools = [t.tool_schema for t in REGISTRY]
+        tools = self._tools_for_llm()
 
         messages: list[dict[str, Any]] = [{"role": "user", "content": question}]
 
@@ -287,7 +287,15 @@ class Orchestrator:
                 assistant_blocks.append({"type": "text", "text": turn.text})
             for tc in turn.tool_calls:
                 assistant_blocks.append(
-                    {"type": "tool_use", "id": tc.id, "name": tc.name, "args": tc.args}
+                    {
+                        "type": "tool_use",
+                        "id": tc.id,
+                        "name": tc.name,
+                        "args": tc.args,
+                        # Opaque provider data (e.g. Gemini's
+                        # thought_signature) that must be echoed back.
+                        "meta": dict(tc.meta),
+                    }
                 )
             messages.append({"role": "assistant", "content": assistant_blocks})
 
@@ -378,6 +386,29 @@ class Orchestrator:
                 "via the registered tools. Cite node ids in square brackets."
             )
 
+    def _tools_for_llm(self) -> list[dict[str, Any]]:
+        """Tool schemas as the model sees them.
+
+        ``tenant`` is removed: it is the orchestrator's concern, and a
+        model that fills it in (observed: ``"default"``) would query a
+        non-existent graph and then thrash looking for data that is not
+        there. It is re-injected on every call in ``_invoke_tool``.
+        """
+        out: list[dict[str, Any]] = []
+        for t in REGISTRY:
+            schema = dict(t.tool_schema)
+            input_schema = dict(schema.get("input_schema") or {})
+            props = dict(input_schema.get("properties") or {})
+            props.pop("tenant", None)
+            required = [
+                r for r in (input_schema.get("required") or []) if r != "tenant"
+            ]
+            input_schema["properties"] = props
+            input_schema["required"] = required
+            schema["input_schema"] = input_schema
+            out.append(schema)
+        return out
+
     def _invoke_tool(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
         """Invoke a tool through the configured transport.
 
@@ -385,9 +416,12 @@ class Orchestrator:
         ``TOOL_TRANSPORT=mcp`` routes through the MCP server, so the
         same tool catalogue is reachable over the protocol.
         """
-        # Every tool expects tenant — inject it from the orchestrator.
-        if "tenant" not in args:
-            args = {**args, "tenant": self.tenant}
+        # The tenant is ALWAYS the orchestrator's. Never trust a value
+        # the model supplied: a model that invents `tenant="default"`
+        # would otherwise silently query an empty graph (and, worse,
+        # could cross tenants). `tenant` is stripped from the tool
+        # schema offered to the model in _tools_for_llm().
+        args = {**args, "tenant": self.tenant}
 
         from agents.transport import call_tool as transport_call_tool
 

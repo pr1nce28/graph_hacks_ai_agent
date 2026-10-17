@@ -24,13 +24,25 @@ it finds.
 ```bash
 # .env
 LLM_PROVIDER=gemini
-GEMINI_API_KEY=AIza...
-GEMINI_MODEL=gemini-2.0-flash
+GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-3.8-flash
 ```
 
 The free tier is rate-limited (a few requests per minute), which is
-ample for a demo. `gemini-2.0-flash` is the lightest model and the
-default.
+ample for a demo.
+
+> **Model names move fast.** `gemini-2.0-flash` is already retired
+> (the API returns 404). If you get a 404, list what your key can
+> actually use:
+>
+> ```bash
+> python -c "from google import genai,os; [print(m.name) for m in genai.Client(api_key=os.environ['GEMINI_API_KEY']).models.list()]"
+> ```
+>
+> then set `GEMINI_MODEL` to one of them.
+
+Keys from AI Studio may start with `AIza` or the newer `AQ.` prefix;
+both work.
 
 ## Anthropic — paid
 
