@@ -95,9 +95,17 @@ Highlights:
 
 See `docs/CONTRACTS.md` for the `GraphPath` response shape, the
 WebSocket event stream, and the REST surface. Tools are registered in
-`tools/registry.py` (a `@Tool` decorator builds the Anthropic tool
-schema from Python type hints) and exposed in-process or via MCP
-(`TOOL_TRANSPORT=inprocess|mcp`).
+`tools/registry.py` (a `@Tool` decorator builds the LLM tool schema
+from Python type hints) and exposed **both** in-process and over the
+**Model Context Protocol** — `TOOL_TRANSPORT=inprocess|mcp`.
+
+```bash
+python -m scripts.mcp_smoke      # 16 tools advertised, calls verified
+```
+
+The MCP server is a real transport, not a wrapper: the same registry
+drives both paths, and a test asserts the MCP route does not silently
+delegate to the in-process one. See **`docs/MCP.md`**.
 
 | Tool | Purpose | Track |
 |---|---|---|

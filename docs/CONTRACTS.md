@@ -48,8 +48,16 @@ Streamed over `/ws/chat?tenant=<graph>&session=<id>`.
 
 ## 3. Tool catalogue
 
-Implemented in `tools/registry.py` via `@tool`; called via
-`TOOL_TRANSPORT=inprocess` or `mcp`.
+Implemented once in `tools/registry.py` via the `@Tool` decorator and
+exposed over **two transports**:
+
+- `TOOL_TRANSPORT=inprocess` (default) — the orchestrator calls the
+  function directly.
+- `TOOL_TRANSPORT=mcp` — the same catalogue is registered on an MCP
+  server (`mcp_server/server.py`) and the orchestrator resolves tools
+  through it. See `docs/MCP.md`.
+
+Both transports return the same `GraphPath` shape (§1).
 
 | Tool | Purpose | Track |
 |---|---|---|
