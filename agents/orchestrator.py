@@ -31,6 +31,10 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
+# Importing the tools package registers every tool in REGISTRY as a
+# side effect. Without this, the orchestrator would see an empty tool
+# catalogue and fail every call with "unknown tool".
+import tools  # noqa: F401
 from tools.registry import REGISTRY
 
 __all__ = ["Orchestrator", "OrchestratorEvent"]
@@ -55,6 +59,53 @@ TOOL_TIMEOUT_S = float(os.environ.get("TOOL_TIMEOUT_S", "10"))
 
 # Anything that looks like a node id in square brackets: [svc_auth], [dec_postgres].
 _CITATION_RE = re.compile(r"\[([A-Za-z_][\w]*)\]")
+
+# Deterministic demo plans used when no Claude key is present so the demo
+# still traverses the real graph and animates the UI. Only the *planner*
+# is scripted; the tools and the graph are the real ones.
+DEMO_SCRIPTS: list[tuple[tuple[str, ...], list[tuple[str, dict]]]] = [
+    (
+        ("postgres", "mongo", "choose", "database"),
+        [
+            ("search_entities", {"query": "Postgres Mongo decision", "k": 3}),
+            ("trace_decision", {"decision_id": "dec_postgres"}),
+        ],
+    ),
+    (
+        ("auth", "affected", "impact", "blast", "breaks"),
+        [
+            ("search_entities", {"query": "auth service", "k": 3}),
+            ("impact_analysis", {"service_id": "svc_auth", "max_depth": 4}),
+            (
+                "create_ticket",
+                {
+                    "title": "Review auth blast radius",
+                    "body": "Auth has downstream dependents across teams.",
+                    "related_ids": ["svc_auth"],
+                },
+            ),
+        ],
+    ),
+    (
+        ("billing", "expert", "who really", "ownership", "owns"),
+        [
+            ("search_entities", {"query": "billing service", "k": 3}),
+            ("find_owner", {"entity_id": "svc_billing"}),
+            ("find_experts", {"topic": "billing", "top_k": 5}),
+        ],
+    ),
+    (
+        ("deadline", "change", "supersede", "launch"),
+        [("recall", {"query": "launch deadline", "include_history": True})],
+    ),
+    (
+        ("notify", "handoff", "everyone affected"),
+        [
+            ("impact_analysis", {"service_id": "svc_auth", "max_depth": 4}),
+            ("create_task", {"goal": "Notify owners of the auth change"}),
+        ],
+    ),
+]
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +237,7 @@ class Orchestrator:
         try:
             import anthropic  # type: ignore
         except ImportError:
-            return self._stub_response(
+            return self._demo_turn(
                 question,
                 reason="anthropic SDK not installed",
                 seen_tools=seen_tools,
@@ -195,7 +246,7 @@ class Orchestrator:
 
         api_key = self.api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
-            return self._stub_response(
+            return self._demo_turn(
                 question,
                 reason="ANTHROPIC_API_KEY not set",
                 seen_tools=seen_tools,
@@ -353,32 +404,98 @@ class Orchestrator:
             if nid and nid != "n/a":
                 self._collected_ids.add(nid)
 
-    def _stub_response(
+    # ------------------------------------------------------------------
+    # Deterministic demo mode
+    # ------------------------------------------------------------------
+
+    def _demo_turn(
         self,
         question: str,
         reason: str,
         seen_tools: list[str] | None = None,
         session_id: str | None = None,
     ) -> dict[str, Any]:
-        """Offline mode: explain why the loop did not run and emit ``done``."""
-        answer = (
-            f"[stub] {reason}. Install `anthropic` and set `ANTHROPIC_API_KEY` "
-            "to exercise the live orchestrator."
-        )
-        self._emit(OrchestratorEvent(type="answer", payload={"text": answer, "citations": []}))
+        """Run a scripted tool sequence against the real graph.
+
+        Used when no Claude key is present so the graph still lights up
+        and the answer still cites real node ids. The plan is
+        deterministic; the tools and the graph are not.
+        """
+        seen_tools = list(seen_tools or [])
+        q = question.lower()
+        script: list[tuple[str, dict]] = []
+        for keywords, steps in DEMO_SCRIPTS:
+            if any(k in q for k in keywords):
+                script = steps
+                break
+
+        tool_summaries: list[str] = []
+        for name, args in script:
+            self._emit(
+                OrchestratorEvent(
+                    type="step",
+                    payload={"tool": name, "args": args, "step": len(seen_tools)},
+                )
+            )
+            result = self._invoke_tool_with_timeout(name, args)
+            seen_tools.append(name)
+            self._harvest_path(result)
+            self._emit(
+                OrchestratorEvent(
+                    type="path",
+                    payload={"tool": name, "path": result.get("path", {"nodes": [], "edges": []})},
+                )
+            )
+            tool_summaries.append(_summarise_tool_result(name, result))
+
+        if not script:
+            answer = (
+                "[demo mode] No scripted plan matches that question. "
+                "Set ANTHROPIC_API_KEY to let the orchestrator plan freely. "
+                f"({reason})"
+            )
+        else:
+            cites = " ".join(f"[{i}]" for i in sorted(self._collected_ids)[:6])
+            answer = (
+                "**Demo mode** (no Claude key set): the orchestrator ran a "
+                "deterministic plan against the live graph.\n\n"
+                + "\n".join(f"- {s}" for s in tool_summaries if s)
+                + f"\n\nCites: {cites}\n\n"
+                f"_Set `ANTHROPIC_API_KEY` to replace this with model-planned "
+                f"reasoning ({reason})._"
+            )
+
+        clean_text, dropped = _enforce_citations(answer, self._collected_ids)
+        payload = {
+            "text": clean_text,
+            "citations": sorted(self._collected_ids),
+            "tools_called": seen_tools,
+            "dropped_citations": dropped,
+            "demo_mode": True,
+        }
+        self._emit(OrchestratorEvent(type="answer", payload=payload))
         self._emit(OrchestratorEvent(type="done"))
-        # Persist the stub turn too so episodic memory still has a record.
-        if _MEMORY_OK and seen_tools is not None:
+
+        if _MEMORY_OK:
             try:
                 _episodic.summarise_session(
                     tenant=self.tenant,
                     session_id=session_id or "sess_default",
-                    summary=answer[:280],
+                    summary=clean_text[:280],
                     touched_ids=sorted(self._collected_ids),
                 )
             except Exception as exc:
-                log.info("summarise_session (stub) skipped: %s", exc)
-        return {"text": answer, "citations": [], "tools_called": seen_tools or [], "dropped_citations": []}
+                log.info("summarise_session (demo) skipped: %s", exc)
+            if seen_tools:
+                try:
+                    _procedural.record_procedure(
+                        tenant=self.tenant,
+                        name=f"turn:{session_id or 'sess_default'}",
+                        steps=seen_tools,
+                    )
+                except Exception as exc:
+                    log.info("record_procedure (demo) skipped: %s", exc)
+        return payload
 
 
 def _serialise_tool_result(result: dict[str, Any]) -> str:
@@ -386,3 +503,48 @@ def _serialise_tool_result(result: dict[str, Any]) -> str:
     import json
 
     return json.dumps(result, default=str, separators=(",", ":"))
+
+
+def _summarise_tool_result(name: str, result: dict[str, Any]) -> str:
+    """One human-readable line describing what a tool returned.
+
+    Used by demo mode so the answer text reflects the real graph state
+    rather than a canned string.
+    """
+    path_nodes = result.get("path", {}).get("nodes", [])
+    n = len(path_nodes)
+    if name == "trace_decision":
+        rows = result.get("result", {}).get("rows", [])
+        if rows:
+            d = rows[0].get("d") or {}
+            ev = rows[0].get("evidence") or []
+            ev_ids = [e.get("src", {}).get("id") for e in ev if isinstance(e, dict)]
+            return (
+                f"`trace_decision` found **{d.get('title', '?')}** with "
+                f"{len(ev_ids)} supporting sources: {', '.join(str(x) for x in ev_ids)}."
+            )
+    if name == "impact_analysis":
+        rows = result.get("result", {}).get("rows", [])
+        return f"`impact_analysis` found **{len(rows)}** downstream dependents."
+    if name == "find_owner":
+        rows = result.get("result", {}).get("rows", [])
+        if rows:
+            o = rows[0].get("o") or {}
+            e = rows[0].get("e") or {}
+            return f"`find_owner` says **{o.get('id', '?')}** formally owns {e.get('id', '?')}."
+    if name == "find_experts":
+        rows = result.get("result", {}).get("rows", [])
+        top = rows[0].get("p", {}).get("id") if rows else None
+        return f"`find_experts` ranks **{top}** first (score {rows[0].get('score') if rows else 0})."
+    if name == "recall":
+        rows = result.get("result", {}).get("rows", [])
+        active = [r for r in rows if (r.get("f") or {}).get("status") == "active"]
+        texts = [((r.get("f") or {}).get("text") or "")[:60] for r in active]
+        return f"`recall` returned {len(rows)} facts ({len(active)} active): {'; '.join(texts)}"
+    if name == "create_ticket":
+        return f"`create_ticket` wrote a Ticket node ({result.get('result', {}).get('ticket_id', '?')})."
+    if name == "create_task":
+        return f"`create_task` wrote a Task node ({result.get('result', {}).get('task_id', '?')})."
+    if name == "search_entities":
+        return f"`search_entities` returned {n} candidate nodes."
+    return f"`{name}` returned {n} nodes."

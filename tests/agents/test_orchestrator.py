@@ -27,46 +27,79 @@ def test_enforce_citations_keeps_seen_drops_unseen():
     assert "[seen_id] is real" in clean  # untouched
 
 
-def test_orchestrator_stub_path_emits_events():
-    """Without an API key, the orchestrator must still produce a well-formed
-    answer payload and emit ``answer`` + ``done`` events."""
+def test_orchestrator_without_key_runs_demo_plan(monkeypatch):
+    """Without an API key the orchestrator runs the deterministic demo
+    plan: it emits step/path events, calls the real tools, and answers."""
+    import graph.client as client
+
+    monkeypatch.setenv("USE_DEV_GRAPH", "true")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    client._dev_graphs.clear()
+
     events: list[OrchestratorEvent] = []
 
     def collect(ev: OrchestratorEvent) -> None:
         events.append(ev)
 
     orch = Orchestrator(on_event=collect)
-    result = orch.call_turn("Why did we pick Postgres?")
+    result = orch.call_turn("Why did we pick Postgres over Mongo?")
     types = [e.type for e in events]
+
+    assert "step" in types, "demo mode must emit step events"
+    assert "path" in types, "demo mode must emit path events"
     assert "answer" in types
     assert "done" in types
-    assert result["text"].startswith("[stub]")
-    assert "ANTHROPIC_API_KEY" in result["text"]
+
+    assert result.get("demo_mode") is True
+    assert result["tools_called"], "the demo plan must call tools"
+    assert "trace_decision" in result["tools_called"]
+    # The answer cites real ids collected from the graph.
+    assert "dec_postgres" in result["citations"]
+    assert "Choose Postgres over Mongo" in result["text"]
 
 
-def test_orchestrator_handles_missing_anthropic_sdk():
-    """If the anthropic SDK cannot be imported the orchestrator falls back
-    to the stub path, never raising."""
-    import builtins
+def test_orchestrator_handles_missing_anthropic_sdk(monkeypatch):
+    """If the anthropic SDK cannot be imported the orchestrator still
+    completes a demo turn instead of raising."""
     import sys
+
+    import graph.client as client
+
+    monkeypatch.setenv("USE_DEV_GRAPH", "true")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    client._dev_graphs.clear()
 
     events: list[OrchestratorEvent] = []
 
     def collect(ev: OrchestratorEvent) -> None:
         events.append(ev)
 
-    # Force ImportError for anthropic by hiding the module.
     saved = sys.modules.pop("anthropic", None)
     sys.modules["anthropic"] = None  # type: ignore[assignment]
     try:
         orch = Orchestrator(on_event=collect)
-        result = orch.call_turn("x")
-        assert result["text"].startswith("[stub]")
+        result = orch.call_turn("Who is affected by the auth service?")
+        assert result["tools_called"]
+        assert any(e.type == "done" for e in events)
     finally:
         if saved is not None:
             sys.modules["anthropic"] = saved
         else:
             sys.modules.pop("anthropic", None)
+
+
+def test_demo_plan_for_unknown_question_says_so(monkeypatch):
+    """A question that matches no demo script must say so honestly."""
+    import graph.client as client
+
+    monkeypatch.setenv("USE_DEV_GRAPH", "true")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    client._dev_graphs.clear()
+
+    orch = Orchestrator()
+    result = orch.call_turn("What is the airspeed velocity of a swallow?")
+    assert "No scripted plan" in result["text"]
+    assert result["tools_called"] == []
 
 
 def test_orchestrator_max_tool_steps_clamped_by_env(monkeypatch):
