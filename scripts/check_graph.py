@@ -123,7 +123,21 @@ def main() -> int:
         return 0
 
     props = {"id": rows[0][0], "name": rows[0][1]}
-    print("OK")
+    # IMPORTANT: report *which* backend answered. Since get_graph() falls
+    # back to the in-memory dev graph when FalkorDB is unreachable, an
+    # unqualified "OK" would wrongly imply FalkorDB was verified.
+    backend = type(graph).__module__ + "." + type(graph).__name__
+    using_dev = "dev_backend" in backend
+    if using_dev:
+        print("OK (in-memory dev graph — NOT FalkorDB)")
+        print(
+            "[check_graph] the round-trip succeeded against the dev "
+            "fallback. To verify FalkorDB itself, start it and re-run with "
+            "USE_DEV_GRAPH=false."
+        )
+    else:
+        print("OK (FalkorDB)")
+    print(f"[check_graph] backend: {backend}")
     print(f"[check_graph] node properties: {props}")
     return 0
 
