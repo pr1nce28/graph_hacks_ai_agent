@@ -17,8 +17,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml ./
 RUN pip install --upgrade pip && pip install \
         "falkordb>=1.0" \
-        "anthropic>=0.40" \
-        "fastapi>=0.110" \
+        "google-genai>=1.0" \
+        "fastapi>=0.110,<0.116" \
+        "starlette>=0.40,<0.42" \
         "uvicorn[standard]>=0.30" \
         "pydantic>=2.7" \
         "sentence-transformers>=3.0" \

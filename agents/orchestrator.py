@@ -56,17 +56,16 @@ except ImportError:  # pragma: no cover
     _coord = _episodic = _procedural = _semantic = None  # type: ignore
     _MEMORY_OK = False
 
-DEFAULT_MODEL = os.environ.get("MODEL", "claude-sonnet-4-5")
+DEFAULT_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 MAX_TOOL_STEPS = int(os.environ.get("MAX_TOOL_STEPS", "8"))
 TOOL_TIMEOUT_S = float(os.environ.get("TOOL_TIMEOUT_S", "10"))
-# anthropic | gemini | auto | none. In auto we prefer Anthropic, then
-# Gemini, then fall back to deterministic demo mode.
-PROVIDER_NAME = os.environ.get("LLM_PROVIDER", "auto")
+# gemini | none. 'none' forces deterministic demo mode.
+PROVIDER_NAME = os.environ.get("LLM_PROVIDER", "gemini")
 
 # Anything that looks like a node id in square brackets: [svc_auth], [dec_postgres].
 _CITATION_RE = re.compile(r"\[([A-Za-z_][\w]*)\]")
 
-# Deterministic demo plans used when no Claude key is present so the demo
+# Deterministic demo plans used when no LLM key is present so the demo
 # still traverses the real graph and animates the UI. Only the *planner*
 # is scripted; the tools and the graph are the real ones.
 DEMO_SCRIPTS: list[tuple[tuple[str, ...], list[tuple[str, dict]]]] = [
@@ -181,11 +180,11 @@ class Orchestrator:
     """Stateless orchestrator. ``call_turn()`` runs one full question turn.
 
     Args:
-        model: Anthropic model id. Defaults to ``claude-sonnet-4-5``.
+        model: Gemini model id. Defaults to ``gemini-3.8-flash``.
         max_tool_steps: hard cap on tool calls per turn.
         tool_timeout_s: per-tool timeout in seconds. 0 disables.
         on_event: optional callback invoked for every OrchestratorEvent.
-        api_key: optional Anthropic API key (defaults to env).
+        api_key: optional Gemini API key (defaults to env).
     """
 
     model: str = DEFAULT_MODEL
@@ -196,7 +195,7 @@ class Orchestrator:
     system_prompt_path: str = "agents/prompts/orchestrator.md"
     tenant: str = "org_acme"
     # Provider selection. ``provider_name`` is an env-style key
-    # (anthropic | gemini | auto | none); ``provider`` lets a caller
+    # (gemini | none); ``provider`` lets a caller
     # inject an instance directly (used by tests).
     provider_name: str = PROVIDER_NAME
     provider: Any = None
@@ -259,8 +258,8 @@ class Orchestrator:
             return self._demo_turn(
                 question,
                 reason=(
-                    "no LLM provider available — set ANTHROPIC_API_KEY or "
-                    "GEMINI_API_KEY (and LLM_PROVIDER=anthropic|gemini|auto)"
+                    "no LLM provider available — set GEMINI_API_KEY and "
+                    "LLM_PROVIDER=gemini (or LLM_PROVIDER=none to silence this)"
                 ),
                 seen_tools=seen_tools,
                 session_id=session_id,
@@ -466,7 +465,7 @@ class Orchestrator:
     ) -> dict[str, Any]:
         """Run a scripted tool sequence against the real graph.
 
-        Used when no Claude key is present so the graph still lights up
+        Used when no Gemini key is present so the graph still lights up
         and the answer still cites real node ids. The plan is
         deterministic; the tools and the graph are not.
         """
@@ -522,7 +521,7 @@ class Orchestrator:
                 "[demo mode] No scripted plan matches that question, so I "
                 "ran a memory recall instead.\n\n"
                 + ("\n".join(f"- {s}" for s in tool_summaries if s) or "- (nothing in memory)")
-                + "\n\n_Set `ANTHROPIC_API_KEY` or `GEMINI_API_KEY` so the "
+                + "\n\n_Set `GEMINI_API_KEY` so the "
                 "orchestrator can plan any question freely. "
                 f"({reason})_"
             )
@@ -533,9 +532,8 @@ class Orchestrator:
                 "deterministic plan against the live graph.\n\n"
                 + "\n".join(f"- {s}" for s in tool_summaries if s)
                 + f"\n\nCites: {cites}\n\n"
-                "_Set `ANTHROPIC_API_KEY` or `GEMINI_API_KEY` (or "
-                "`LLM_PROVIDER=gemini`) to replace this with model-planned "
-                f"reasoning. ({reason})_"
+                "_Set `GEMINI_API_KEY` and `LLM_PROVIDER=gemini` to replace "
+                f"this with model-planned reasoning. ({reason})_"
             )
 
         clean_text, dropped = _enforce_citations(answer, self._collected_ids)
@@ -572,7 +570,7 @@ class Orchestrator:
 
 
 def _serialise_tool_result(result: dict[str, Any]) -> str:
-    """Turn a GraphPath dict into the JSON string Claude expects."""
+    """Turn a GraphPath dict into the JSON string the model expects."""
     import json
 
     return json.dumps(result, default=str, separators=(",", ":"))

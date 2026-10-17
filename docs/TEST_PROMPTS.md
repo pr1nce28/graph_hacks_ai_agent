@@ -10,7 +10,7 @@ Two modes change what you will see:
   plan** for questions matching the keyword sets below. It still calls
   the **real tools against the real graph**, so the paths, nodes and
   citations are genuine — only the *planning* is scripted.
-* **Live mode** (`ANTHROPIC_API_KEY` or `GEMINI_API_KEY` set): the model
+* **Live mode** (`Gemini_API_KEY` or `GEMINI_API_KEY` set): the model
   plans freely, so any phrasing works. The answers become prose instead
   of a tool summary.
 

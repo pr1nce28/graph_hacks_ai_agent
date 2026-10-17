@@ -126,5 +126,5 @@ async def ws_chat(websocket: WebSocket) -> None:
 
 
 def _serialise_tool_result(result: dict[str, Any]) -> str:
-    """Turn a GraphPath dict into the JSON string Claude expects."""
+    """Turn a GraphPath dict into the JSON string the model expects."""
     return json.dumps(result, default=str, separators=(",", ":"))

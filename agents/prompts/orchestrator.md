@@ -12,7 +12,7 @@ or graph internals; it only sees the tools registered in `tools/registry.py`
 
 ---
 
-## Prompt (verbatim, fed to Claude)
+## Prompt (verbatim, fed to the model)
 
 ```
 You are OrgMind, the Company Brain for {tenant_name}. You answer questions

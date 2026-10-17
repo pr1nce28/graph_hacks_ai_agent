@@ -2,7 +2,7 @@
 
 > The actual semantics live in :mod:`memory.semantic`. This module
 > exposes those functions through the tool registry so the orchestrator
-> can call them via Anthropic tool-use. The tool surface stays stable;
+> can call them via Gemini tool-use. The tool surface stays stable;
 > the implementation can move.
 """
 

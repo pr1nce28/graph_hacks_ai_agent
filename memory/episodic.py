@@ -1,7 +1,7 @@
 """Episodic memory: per-session summaries and the entities they touched.
 
 > Implements P3-A-03. At the end of every turn the orchestrator calls
-> :func:`summarise_session` with the user's question, the summary Claude
+> :func:`summarise_session` with the user's question, the summary the model
 > produced, and the collected node ids. We write one ``Episode`` node
 > and one ``TOUCHED`` edge per collected id so the agent can later
 > answer "what did we discuss last time about X?" by traversing

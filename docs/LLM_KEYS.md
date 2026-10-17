@@ -1,25 +1,23 @@
-# Getting an LLM Key
+# The LLM Key (Gemini)
 
-> OrgMind's graph layer is FalkorDB and works without any LLM. The
-> **planner** needs a model. Without a key the orchestrator runs
-> **demo mode** (deterministic plans against the real graph); with a key
-> it plans freely.
+> OrgMind's graph layer is FalkorDB and works with **no LLM at all**.
+> The *planner* needs Gemini. Without a key the orchestrator runs
+> **demo mode**: deterministic plans executed against the real graph, so
+> the app is fully demonstrable offline.
 
-Both vendors are supported through one abstraction
-(`agents/llm.py`). Pick either; `LLM_PROVIDER=auto` uses whichever key
-it finds.
+`LLM_PROVIDER` has two values:
 
-| Provider | Cost | Card needed | Sign-up time | Get the key |
-|---|---|---|---|---|
-| **Gemini** (Google AI Studio) | free tier | no | ~1 min | https://aistudio.google.com/apikey |
-| **Anthropic** | paid (needs credits) | yes | ~5 min | https://console.anthropic.com/settings/keys |
+| Value | Behaviour |
+|---|---|
+| `gemini` (default) | plan with Gemini — needs `GEMINI_API_KEY` |
+| `none` | deterministic demo mode; real graph, real tools, zero API calls |
 
-## Gemini — free, no card
+## Getting a key
 
 1. Open <https://aistudio.google.com/apikey>
 2. Sign in with a Google account
 3. **Create API key** → accept the project it offers to create
-4. Copy the key (starts with `AIza`)
+4. Copy the key
 
 ```bash
 # .env
@@ -28,23 +26,44 @@ GEMINI_API_KEY=...
 GEMINI_MODEL=gemini-3.8-flash
 ```
 
-The free tier is rate-limited (a few requests per minute), which is
-ample for a demo.
+Keys may start with `AIza` or the newer `AQ.` prefix; both work.
 
-> **Model names move fast.** `gemini-2.0-flash` is already retired
-> (the API returns 404). If you get a 404, list what your key can
-> actually use:
->
-> ```bash
-> python -c "from google import genai,os; [print(m.name) for m in genai.Client(api_key=os.environ['GEMINI_API_KEY']).models.list()]"
-> ```
->
-> then set `GEMINI_MODEL` to one of them.
+## Verify it is picked up
 
-Keys from AI Studio may start with `AIza` or the newer `AQ.` prefix;
-both work.
+```bash
+python -c "from agents.llm import available_providers; print(available_providers())"
+# {'gemini': True, 'google': True}
+```
 
-### Free-tier limits are tighter than they look
+Then, optionally, one live round trip including tool calling:
+
+```bash
+python -m scripts.llm_smoke            # makes one real API request
+python -m scripts.llm_smoke --no-call  # config only
+```
+
+## Restart after changing `.env`
+
+`.env` is read at import time:
+
+```bash
+# stop the running uvicorn, then
+python -m uvicorn api.main:app --host 127.0.0.1 --port 8000
+```
+
+## How to tell which mode you are in
+
+Ask `Why did we choose Postgres over Mongo?` in the UI.
+
+| Mode | What you see |
+|---|---|
+| demo (`LLM_PROVIDER=none` or no key) | `**Demo mode** (no LLM key set): the orchestrator ran a deterministic plan…` then a bullet list of tool summaries |
+| Gemini-planned | a written answer citing node ids, e.g. *"Postgres was chosen because the bake-off doc and the #payments thread both agree — see [dec_postgres]."* |
+
+The graph traversal, the tools used and the citation check are
+identical either way. **Only the planning changes.**
+
+## Free-tier limits are tighter than they look
 
 Measured against a live free-tier key:
 
@@ -54,75 +73,45 @@ Measured against a live free-tier key:
 | Requests **per day** | **20** |
 
 One agent turn costs at least two requests (plan, then answer), and a
-turn that uses several tools costs more. A few demo runs will exhaust a
-free key for the day — the API then returns `429` with a retry delay in
-the **hours**.
+turn that uses several tools costs more. A few demo runs exhaust a free
+key for the day; the API then returns `429` with a retry delay measured
+in **hours**.
 
 What to do:
 
-* Set `LLM_PROVIDER=none` to work offline; demo mode exercises the real
-  graph with no API calls at all.
-* Space out live runs, or pick a different model in the console —
-  per-day quotas differ per model.
+* Set `LLM_PROVIDER=none` and work offline — demo mode exercises the
+  real graph with no API calls.
+* Space out live runs, or pick a different model in the console
+  (per-day quotas differ per model).
 * Enable billing for a key you intend to demo repeatedly.
-* OrgMind already retries a `429` using the delay the server suggests,
-  up to `GEMINI_MAX_RETRIES` (default 3).
+* OrgMind retries a `429` using the delay the server suggests, up to
+  `GEMINI_MAX_RETRIES` (default 3).
 
-## Anthropic — paid
+## Model names move fast
 
-1. Open <https://console.anthropic.com/settings/keys>
-2. Sign up, then add **billing** (keys do not work without credit)
-3. **Create Key** → copy it (starts with `sk-ant-`)
-
-```bash
-# .env
-LLM_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-...
-MODEL=claude-sonnet-4-5
-```
-
-## Verify the key is picked up
+`gemini-2.0-flash` is already retired (the API returns 404). If you hit
+a 404, list what your key can actually use:
 
 ```bash
-python -c "from agents.llm import available_providers; print(available_providers())"
+python -c "from google import genai,os; [print(m.name) for m in genai.Client(api_key=os.environ['GEMINI_API_KEY']).models.list()]"
 ```
 
-Expected — the key you set flips to `True`:
+then set `GEMINI_MODEL` to one of them.
 
-```
-{'anthropic': False, 'claude': False, 'gemini': True, 'google': True}
-```
+## If you want a second provider
 
-Restart the API afterwards; `.env` is read at import time:
-
-```bash
-# stop the running uvicorn, then
-python -m uvicorn api.main:app --host 127.0.0.1 --port 8000
-```
-
-## How to tell it is working
-
-Ask `Why did we choose Postgres over Mongo?` in the UI.
-
-| Planner | What you see |
-|---|---|
-| demo mode (no key) | `**Demo mode** (no LLM key set): the orchestrator ran a deterministic plan…` followed by a bullet list of tool summaries |
-| model-planned (key set) | a written answer citing node ids, e.g. *"Postgres was chosen because the bake-off doc and the #payments thread both point to it — see [dec_postgres]."* |
-
-The graph traversal, the tools used and the citation check are
-identical either way. Only the planning changes.
-
-## Alternatives
-
-| Option | Note |
-|---|---|
-| `LLM_PROVIDER=none` | force demo mode — useful when recording a deterministic demo |
-| Ollama / local model | not wired; would need a third adapter in `agents/llm.py` |
-| Vertex AI | the Gemini adapter talks to the Google AI Studio endpoint; Vertex needs different auth |
+`agents/llm.py` defines a small `Provider` interface (`complete()` in,
+`TurnResult` out) and one implementation, `GeminiProvider`. Adding
+another is one class plus one entry in `_PROVIDERS`; nothing else in the
+codebase knows which vendor is in use.
 
 ## Security
 
-`.env` is gitignored; **never** commit a key. If one leaks, revoke it
+`.env` is gitignored — **never** commit a key. If one leaks, revoke it
 in the console immediately. The public-demo safeguards
 (`RATE_LIMIT_PER_MIN`, `DEMO_READ_ONLY`) exist so a deployed instance
 cannot burn through a key.
+
+> **The test suite never calls the API.** `tests/conftest.py` forces
+> `LLM_PROVIDER=none` and blanks the key, so once you add a real key
+> your tests stay fast, deterministic and free.

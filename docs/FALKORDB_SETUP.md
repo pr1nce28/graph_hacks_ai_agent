@@ -138,11 +138,11 @@ idempotency, tenant isolation — behaves the same.
 ## Switching LLM provider (independent of FalkorDB)
 
 FalkorDB and the LLM are separate concerns. The graph always runs in
-FalkorDB (or the dev fallback); the *planner* can be Claude or Gemini:
+FalkorDB (or the dev fallback); the *planner* can be the model or Gemini:
 
 ```bash
-LLM_PROVIDER=auto        # prefer Anthropic, then Gemini, then demo mode
-LLM_PROVIDER=anthropic   # ANTHROPIC_API_KEY
+LLM_PROVIDER=auto        # prefer Gemini, then Gemini, then demo mode
+LLM_PROVIDER=Gemini   # Gemini_API_KEY
 LLM_PROVIDER=gemini      # GEMINI_API_KEY
 LLM_PROVIDER=none        # always deterministic demo mode
 ```

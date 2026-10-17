@@ -1,8 +1,8 @@
 r'''Tool registry for OrgMind.
 
 Implements the :class:`Tool` decorator that converts a plain Python function
-into a Claude-compatible tool definition. The orchestrator (Phase 2+) feeds
-``Tool.tool_schema`` straight into the Anthropic ``tools=[...]`` list and
+into a Gemini-compatible tool definition. The orchestrator (Phase 2+) feeds
+``Tool.tool_schema`` straight into the Gemini ``tools=[...]`` list and
 re-dispatches calls back to the wrapped function.
 
 Canonical tool names and signatures live in ``docs/CONTRACTS.md`` section 3
@@ -20,7 +20,7 @@ Example
         # docstring stripped and used as the tool description
         return a + b
 
-    # Wire to Anthropic:
+    # Wire to Gemini:
     # client.messages.create(..., tools=[add.tool_schema], ...)
 '''
 
@@ -95,7 +95,7 @@ def _annotation_to_schema(ann: Any) -> dict:
 
 
 def _build_schema(func: Callable[..., Any]) -> dict:
-    """Build a Claude ``tools=[...]`` entry from a Python function."""
+    """Build a Gemini ``tools=[...]`` entry from a Python function."""
     sig = inspect.signature(func)
 
     try:
@@ -108,7 +108,7 @@ def _build_schema(func: Callable[..., Any]) -> dict:
     required: list[str] = []
 
     for name, param in sig.parameters.items():
-        # *args / **kwargs aren't real Claude tool inputs.
+        # *args / **kwargs aren't real the model tool inputs.
         if param.kind in (
             inspect.Parameter.VAR_POSITIONAL,
             inspect.Parameter.VAR_KEYWORD,
@@ -142,7 +142,7 @@ def _build_schema(func: Callable[..., Any]) -> dict:
 
 
 class Tool:
-    """Decorator that registers a Python function as an Anthropic tool.
+    """Decorator that registers a Python function as an Gemini tool.
 
     Usage::
 
@@ -153,7 +153,7 @@ class Tool:
 
     Each instance records itself into :data:`REGISTRY` at decoration time,
     in declaration order. ``tool_schema`` returns the dict that goes into
-    the Anthropic ``tools=[...]`` list. Calling the instance forwards to
+    the Gemini ``tools=[...]`` list. Calling the instance forwards to
     the wrapped function unchanged.
     """
 
@@ -176,7 +176,7 @@ class Tool:
 
     @property
     def tool_schema(self) -> dict:
-        """The ``{name, description, input_schema}`` dict for Anthropic."""
+        """The ``{name, description, input_schema}`` dict for Gemini."""
         return self._schema
 
     @property

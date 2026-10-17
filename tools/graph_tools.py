@@ -2,7 +2,7 @@
 
 > Implements P2-B-01. Every tool here is a thin wrapper around a query in
 > :mod:`graph.queries`. The tool signature is what the orchestrator sees
-> (it becomes the Anthropic tool schema via ``tools.registry.Tool``);
+> (it becomes the Gemini tool schema via ``tools.registry.Tool``);
 > the body is the GraphPath contract from CONTRACTS §1.
 
 Tool catalogue (CONTRACTS §3):

@@ -81,7 +81,7 @@ api, web → agents → tools → memory, ingestion → graph → FalkorDB
 * **Tools** (`tools/`) — single registry, MCP transport toggle.
 * **Memory** (`memory/`) — semantic / episodic / procedural /
   coordination; all in the graph.
-* **Ingestion** (`ingestion/`) — idem-potent MERGE loader + Claude
+* **Ingestion** (`ingestion/`) — idem-potent MERGE loader + the model
   structured extraction.
 * **Graph** (`graph/`) — connection, schema, every Cypher.
 

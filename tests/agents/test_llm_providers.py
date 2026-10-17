@@ -10,7 +10,6 @@ from __future__ import annotations
 import pytest
 
 from agents.llm import (
-    AnthropicProvider,
     GeminiProvider,
     ToolCall,
     TurnResult,
@@ -76,15 +75,15 @@ def test_gemini_schema_keeps_enum():
 # ---------------------------------------------------------------------------
 
 
-def test_no_keys_means_auto_returns_none(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+def test_no_key_means_none(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-    assert get_provider("auto") is None
+    assert get_provider("gemini") is None
+    assert get_provider() is None
 
 
 def test_explicit_none_provider(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-fake")
+    monkeypatch.setenv("GEMINI_API_KEY", "fake")
     assert get_provider("none") is None
 
 
@@ -93,15 +92,26 @@ def test_unknown_provider_name_raises():
         get_provider("banana")
 
 
-def test_anthropic_available_only_with_key(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    assert AnthropicProvider().available() is False
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-fake")
-    # available() also checks the SDK is importable.
+def test_legacy_auto_value_maps_to_gemini(monkeypatch):
+    """'auto' used to mean 'Gemini then Gemini'; now it means Gemini."""
+    monkeypatch.setenv("GEMINI_API_KEY", "fake")
     import importlib.util
 
-    expected = importlib.util.find_spec("anthropic") is not None
-    assert AnthropicProvider().available() is expected
+    if importlib.util.find_spec("google.genai") is None:
+        pytest.skip("google-genai not installed")
+    p = get_provider("auto")
+    assert p is not None and p.name == "gemini"
+
+
+def test_gemini_available_only_with_key(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    assert GeminiProvider().available() is False
+    monkeypatch.setenv("GEMINI_API_KEY", "fake")
+    import importlib.util
+
+    expected = importlib.util.find_spec("google.genai") is not None
+    assert GeminiProvider().available() is expected
 
 
 def test_gemini_reads_either_env_var(monkeypatch):
@@ -113,13 +123,11 @@ def test_gemini_reads_either_env_var(monkeypatch):
     assert GeminiProvider().api_key == "gm-fake-2"
 
 
-def test_available_providers_reports_all(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+def test_available_providers_reports_only_gemini(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     report = available_providers()
-    # Keys that name the same provider family report together.
-    assert set(report) >= {"anthropic", "claude", "gemini", "google"}
+    assert set(report) == {"gemini", "google"}
     assert all(v is False for v in report.values())
 
 
@@ -133,28 +141,34 @@ def test_turn_result_wants_tools():
     assert TurnResult(text="", tool_calls=[ToolCall(id="1", name="t", args={})]).wants_tools is True
 
 
-def test_anthropic_sanitise_strips_neutral_fields():
-    """The neutral tool_result carries 'name' for Gemini; Anthropic's API
-    rejects unknown fields, so the Anthropic adapter must strip it."""
-    msgs = [
-        {"role": "user", "content": "q"},
-        {
-            "role": "assistant",
-            "content": [{"type": "tool_use", "id": "a", "name": "search", "args": {"x": 1}}],
+def test_tool_call_carries_meta_for_round_tripping():
+    """Gemini 3.x requires the thought_signature to come back with the
+    call; it rides in ToolCall.meta."""
+    tc = ToolCall(id="a", name="search", args={"x": 1}, meta={"thought_signature": b"sig"})
+    assert tc.meta["thought_signature"] == b"sig"
+    # Default is empty, not shared between instances.
+    other = ToolCall(id="b", name="t")
+    other.meta["k"] = "v"
+    assert tc.meta.get("k") is None
+
+
+def test_gemini_schema_round_trip_via_converter():
+    """Registry-shaped schemas survive to_gemini_schema intact enough to
+    name the function and its required parameters."""
+    schema = {
+        "name": "find_owner",
+        "description": "Return the formal owner.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"entity_id": {"type": "string"}},
+            "required": ["entity_id"],
         },
-        {
-            "role": "user",
-            "content": [
-                {"type": "tool_result", "tool_use_id": "a", "name": "search", "content": "{}"}
-            ],
-        },
-    ]
-    out = AnthropicProvider._sanitise(msgs)
-    # assistant block uses Anthropic's 'input' key, not neutral 'args'.
-    assert out[1]["content"][0]["input"] == {"x": 1}
-    # tool_result has no 'name' key.
-    assert "name" not in out[2]["content"][0]
-    assert out[2]["content"][0]["tool_use_id"] == "a"
+    }
+    from agents.llm import _tools_for_gemini
+
+    decls = _tools_for_gemini([schema])[0]["function_declarations"]
+    assert decls[0]["name"] == "find_owner"
+    assert decls[0]["parameters"]["required"] == ["entity_id"]
 
 
 # ---------------------------------------------------------------------------

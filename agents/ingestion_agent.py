@@ -1,11 +1,11 @@
 """Ingestion agent.
 
 > Implements P3-B-03. The Ingestion agent turns raw text (a doc, a
-> transcript, a chunk of chat) into nodes and edges using Claude's
+> transcript, a chunk of chat) into nodes and edges using the model's
 > structured output. The result is handed off to the loader.
 
 This is a thin wrapper today; the extraction prompt and the structured
-schema are designed but the live call requires an Anthropic API key.
+schema are designed but the live call requires an Gemini API key.
 """
 
 from __future__ import annotations
@@ -56,25 +56,25 @@ EXTRACTION_SCHEMA: dict[str, Any] = {
 
 @dataclass
 class IngestionAgent:
-    """Extracts structured entities from raw text via Claude."""
+    """Extracts structured entities from raw text via the model."""
 
     tenant: str = "org_acme"
     api_key: str | None = None
-    model: str = os.environ.get("MODEL", "claude-sonnet-4-5")
+    model: str = os.environ.get("MODEL", "the model-sonnet-4-5")
 
     def extract(self, text: str) -> dict[str, Any]:
-        """Call Claude with the structured schema and return the parsed JSON."""
+        """Call the model with the structured schema and return the parsed JSON."""
         try:
-            import anthropic  # type: ignore
+            import Gemini  # type: ignore
         except ImportError:
-            log.warning("anthropic SDK not installed; returning empty extraction")
+            log.warning("Gemini SDK not installed; returning empty extraction")
             return {"people": [], "services": [], "decisions": [], "facts": []}
 
-        api_key = self.api_key or os.environ.get("ANTHROPIC_API_KEY")
+        api_key = self.api_key or os.environ.get("Gemini_API_KEY")
         if not api_key:
             return {"people": [], "services": [], "decisions": [], "facts": []}
 
-        client = anthropic.Anthropic(api_key=api_key)
+        client = Gemini.Gemini(api_key=api_key)
         response = client.messages.create(
             model=self.model,
             max_tokens=1024,

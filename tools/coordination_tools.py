@@ -2,7 +2,7 @@
 
 The actual semantics live in :mod:`memory.coordination`. This module
 exposes the key functions through the tool registry so the orchestrator
-can call them via Anthropic tool-use.
+can call them via Gemini tool-use.
 """
 
 from __future__ import annotations

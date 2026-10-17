@@ -36,7 +36,7 @@ git clone https://github.com/pr1nce28/graph_hacks_ai_agent
 cd graph_hacks_ai_agent
 
 cp .env.example .env
-# put your ANTHROPIC_API_KEY into .env (optional for live mode)
+# put your GEMINI_API_KEY into .env (optional; see docs/LLM_KEYS.md)
 
 make up          # docker compose up -d — FalkorDB, FalkorDB Browser, API, Web
 make seed        # loads synthetic Acme Payments + Globex tenants
@@ -107,10 +107,11 @@ The MCP server is a real transport, not a wrapper: the same registry
 drives both paths, and a test asserts the MCP route does not silently
 delegate to the in-process one. See **`docs/MCP.md`**.
 
-**The planner** is pluggable across Claude and Gemini. Without a key the
-orchestrator runs *demo mode*: deterministic plans executed against the
-real graph, so the app is fully demonstrable with no API key. Add one to
-get model-planned answers — see **`docs/LLM_KEYS.md`**.
+**The planner** uses Google **Gemini** (`LLM_PROVIDER=gemini`). Without a
+key the orchestrator runs *demo mode*: deterministic plans executed
+against the real graph, so the app is fully demonstrable with no API key
+at all. Add one to get model-planned answers — see
+**`docs/LLM_KEYS.md`**.
 
 | Tool | Purpose | Track |
 |---|---|---|

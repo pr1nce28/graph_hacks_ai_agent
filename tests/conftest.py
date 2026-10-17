@@ -18,7 +18,7 @@ import os
 
 def pytest_configure(config):  # noqa: ARG001
     os.environ["LLM_PROVIDER"] = "none"
-    # Belt and braces: also blank the keys so an accidental provider
+    # Belt and braces: also blank the key so an accidental provider
     # selection cannot authenticate.
-    for var in ("ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"):
+    for var in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
         os.environ.pop(var, None)

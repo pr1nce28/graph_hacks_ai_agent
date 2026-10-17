@@ -66,13 +66,13 @@ def test_write_env_creates_file(tmp_path):
 def test_write_env_preserves_unrelated_keys(tmp_path):
     env = tmp_path / ".env"
     env.write_text(
-        "# my comment\nANTHROPIC_API_KEY=sk-keepme\nFALKORDB_HOST=old\n",
+        "# my comment\nGemini_API_KEY=sk-keepme\nFALKORDB_HOST=old\n",
         encoding="utf-8",
     )
     write_env({"FALKORDB_HOST": "new-host"}, env)
     text = env.read_text(encoding="utf-8")
     assert "# my comment" in text
-    assert "ANTHROPIC_API_KEY=sk-keepme" in text
+    assert "Gemini_API_KEY=sk-keepme" in text
     assert "FALKORDB_HOST=new-host" in text
     assert "FALKORDB_HOST=old" not in text
 

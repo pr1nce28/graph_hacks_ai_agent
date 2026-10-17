@@ -44,7 +44,7 @@ def remember(text: str, about_ids: list[str], tenant: str) -> dict[str, Any]:
 
     Returns ``{fact_id, similar_fact_id, contradiction}``. If a similar
     active Fact already exists, ``similar_fact_id`` and ``contradiction``
-    flag the orchestrator to ask Claude whether to supersede — the tool
+    flag the orchestrator to ask the model whether to supersede — the tool
     itself never silently overwrites (P3-A-02).
     """
     graph = get_graph(tenant)

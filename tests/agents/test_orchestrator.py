@@ -1,6 +1,6 @@
 """Unit tests for the orchestrator.
 
-These tests do not require a live Anthropic API key. They exercise the
+These tests do not require a live Gemini API key. They exercise the
 citation enforcement and the offline stub path.
 """
 
@@ -33,7 +33,7 @@ def test_orchestrator_without_key_runs_demo_plan(monkeypatch):
     import graph.client as client
 
     monkeypatch.setenv("USE_DEV_GRAPH", "true")
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("Gemini_API_KEY", raising=False)
     client._dev_graphs.clear()
 
     events: list[OrchestratorEvent] = []
@@ -58,15 +58,15 @@ def test_orchestrator_without_key_runs_demo_plan(monkeypatch):
     assert "Choose Postgres over Mongo" in result["text"]
 
 
-def test_orchestrator_handles_missing_anthropic_sdk(monkeypatch):
-    """If the anthropic SDK cannot be imported the orchestrator still
+def test_orchestrator_handles_missing_Gemini_sdk(monkeypatch):
+    """If the Gemini SDK cannot be imported the orchestrator still
     completes a demo turn instead of raising."""
     import sys
 
     import graph.client as client
 
     monkeypatch.setenv("USE_DEV_GRAPH", "true")
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("Gemini_API_KEY", raising=False)
     client._dev_graphs.clear()
 
     events: list[OrchestratorEvent] = []
@@ -74,8 +74,8 @@ def test_orchestrator_handles_missing_anthropic_sdk(monkeypatch):
     def collect(ev: OrchestratorEvent) -> None:
         events.append(ev)
 
-    saved = sys.modules.pop("anthropic", None)
-    sys.modules["anthropic"] = None  # type: ignore[assignment]
+    saved = sys.modules.pop("Gemini", None)
+    sys.modules["Gemini"] = None  # type: ignore[assignment]
     try:
         orch = Orchestrator(on_event=collect)
         result = orch.call_turn("Who is affected by the auth service?")
@@ -83,9 +83,9 @@ def test_orchestrator_handles_missing_anthropic_sdk(monkeypatch):
         assert any(e.type == "done" for e in events)
     finally:
         if saved is not None:
-            sys.modules["anthropic"] = saved
+            sys.modules["Gemini"] = saved
         else:
-            sys.modules.pop("anthropic", None)
+            sys.modules.pop("Gemini", None)
 
 
 def test_demo_plan_for_unknown_question_falls_back_to_recall(monkeypatch):
@@ -94,7 +94,7 @@ def test_demo_plan_for_unknown_question_falls_back_to_recall(monkeypatch):
     import graph.client as client
 
     monkeypatch.setenv("USE_DEV_GRAPH", "true")
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("Gemini_API_KEY", raising=False)
     client._dev_graphs.clear()
 
     orch = Orchestrator()
@@ -103,7 +103,7 @@ def test_demo_plan_for_unknown_question_falls_back_to_recall(monkeypatch):
     # The fallback runs a real recall so the turn still shows graph state.
     assert result["tools_called"] == ["recall"]
     # And it must be explicit that free planning needs a key.
-    assert "ANTHROPIC_API_KEY" in result["text"] or "GEMINI_API_KEY" in result["text"]
+    assert "Gemini_API_KEY" in result["text"] or "GEMINI_API_KEY" in result["text"]
 
 
 def test_demo_plan_matches_the_history_question(monkeypatch):
@@ -111,7 +111,7 @@ def test_demo_plan_matches_the_history_question(monkeypatch):
     import graph.client as client
 
     monkeypatch.setenv("USE_DEV_GRAPH", "true")
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("Gemini_API_KEY", raising=False)
     client._dev_graphs.clear()
 
     orch = Orchestrator()
@@ -161,7 +161,7 @@ def test_orchestrator_says_no_path_when_nothing_collected(monkeypatch):
     when the orchestrator has nothing to cite."""
     from agents.orchestrator import Orchestrator
 
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("Gemini_API_KEY", raising=False)
     orch = Orchestrator()
     result = orch.call_turn("Why?")
     # Either the stub phrase or the no-path phrase is acceptable;

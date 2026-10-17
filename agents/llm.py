@@ -1,26 +1,31 @@
-"""Pluggable LLM providers for OrgMind.
+"""LLM provider for OrgMind (Gemini).
 
-> The agent loop is provider-agnostic. ``LLM_PROVIDER`` selects which
-> backend plans the turn:
+> The agent loop is provider-agnostic in shape — ``complete()`` takes a
+> system prompt, a neutral message list and the tool catalogue, and
+> returns a :class:`TurnResult` — but this project ships **one**
+> provider: Google **Gemini**, via the official ``google-genai`` SDK.
+>
+> ``LLM_PROVIDER`` selects the behaviour:
 
-* ``anthropic`` (default) — Claude via the official ``anthropic`` SDK.
-* ``gemini`` — Gemini via the official ``google-genai`` SDK.
-* ``none`` — no provider; the orchestrator falls back to demo mode.
+* ``gemini`` (default) — plan with Gemini. Requires ``GEMINI_API_KEY``.
+* ``none`` — no model; the orchestrator falls back to deterministic
+  demo mode, which still calls the real tools against the real graph.
 
-Why: an agent that depends on one vendor's API availability is fragile.
-Anthropic and Gemini both expose function calling, so the same tool
-registry drives either. Swapping providers is one env var.
+Why one provider: the graph is the point of the project. A second
+provider doubles the surface (two tool-schema dialects, two tool-call
+round-trip formats) for no benefit to the demo. If Gemini's free quota
+runs out, ``LLM_PROVIDER=none`` keeps everything working; a second
+adapter can be added back behind the same ``Provider`` interface in one
+file.
 
 The neutral turn model
 ----------------------
-``complete()`` takes a system prompt, a neutral message list, and the
-tool catalogue, and returns a :class:`TurnResult` with:
+``complete()`` returns a :class:`TurnResult` with:
 
-* ``text`` — any assistant text produced this turn.
-* ``tool_calls`` — zero or more ``ToolCall(id, name, args)``.
-
-The orchestrator then executes the tools and appends the results as a
-neutral ``tool_result`` message, so it never touches a vendor SDK.
+* ``text`` — assistant text produced this turn.
+* ``tool_calls`` — zero or more ``ToolCall``, each carrying an opaque
+  ``meta`` dict for provider data that must be echoed back (Gemini 3.x
+  requires the ``thought_signature`` that accompanies a function call).
 """
 
 from __future__ import annotations
@@ -40,12 +45,13 @@ __all__ = [
     "ToolCall",
     "TurnResult",
     "Provider",
-    "AnthropicProvider",
     "GeminiProvider",
     "get_provider",
     "available_providers",
     "to_gemini_schema",
 ]
+
+DEFAULT_PROVIDER = "gemini"
 
 
 # ---------------------------------------------------------------------------
@@ -59,8 +65,7 @@ class ToolCall:
 
     ``meta`` carries opaque, provider-specific data that must be echoed
     back on the next request. Gemini 3.x requires the
-    ``thought_signature`` that accompanies a function call; Anthropic
-    has no equivalent and ignores this.
+    ``thought_signature`` that accompanies a function call.
     """
 
     id: str
@@ -135,7 +140,7 @@ def _tools_for_gemini(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# Provider protocol-ish base
+# Provider base
 # ---------------------------------------------------------------------------
 
 
@@ -158,91 +163,6 @@ class Provider:
 
 
 # ---------------------------------------------------------------------------
-# Anthropic
-# ---------------------------------------------------------------------------
-
-
-class AnthropicProvider(Provider):
-    name = "anthropic"
-
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None) -> None:
-        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
-        self.model = model or os.environ.get("MODEL", "claude-sonnet-4-5")
-
-    def available(self) -> bool:
-        if not self.api_key:
-            return False
-        try:
-            import anthropic  # type: ignore  # noqa: F401
-
-            return True
-        except ImportError:
-            return False
-
-    @staticmethod
-    def _sanitise(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Strip neutral-only fields that the Anthropic API rejects.
-
-        Our neutral tool_result blocks carry a ``name`` so Gemini can
-        match the response to its call; Anthropic's schema does not know
-        that field and errors on it.
-        """
-        out: list[dict[str, Any]] = []
-        for m in messages:
-            content = m.get("content")
-            if isinstance(content, list):
-                new_blocks = []
-                for b in content:
-                    if b.get("type") == "tool_result":
-                        new_blocks.append(
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": b.get("tool_use_id"),
-                                "content": b.get("content", ""),
-                            }
-                        )
-                    elif b.get("type") == "tool_use":
-                        # `meta` is neutral-only (it carries Gemini's
-                        # thought_signature); Anthropic rejects unknown
-                        # fields.
-                        new_blocks.append(
-                            {
-                                "type": "tool_use",
-                                "id": b.get("id"),
-                                "name": b.get("name"),
-                                "input": b.get("args", {}),
-                            }
-                        )
-                    else:
-                        new_blocks.append(b)
-                out.append({"role": m["role"], "content": new_blocks})
-            else:
-                out.append(m)
-        return out
-
-    def complete(self, system, messages, tools, max_tokens=1024) -> TurnResult:
-        import anthropic  # type: ignore
-
-        client = anthropic.Anthropic(api_key=self.api_key)
-        resp = client.messages.create(
-            model=self.model,
-            max_tokens=max_tokens,
-            system=system,
-            tools=tools,
-            messages=self._sanitise(messages),
-        )
-        text = ""
-        calls: list[ToolCall] = []
-        for block in resp.content:
-            btype = getattr(block, "type", None)
-            if btype == "text":
-                text += getattr(block, "text", "")
-            elif btype == "tool_use":
-                calls.append(ToolCall(id=block.id, name=block.name, args=dict(block.input or {})))
-        return TurnResult(text=text, tool_calls=calls)
-
-
-# ---------------------------------------------------------------------------
 # Gemini
 # ---------------------------------------------------------------------------
 
@@ -256,7 +176,7 @@ class GeminiProvider(Provider):
             or os.environ.get("GEMINI_API_KEY")
             or os.environ.get("GOOGLE_API_KEY")
         )
-        # gemini-2.0-flash has been retired by the API; 3.8-flash is current.
+        # gemini-2.0-flash is retired by the API; 3.8-flash is current.
         self.model = model or os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 
     def available(self) -> bool:
@@ -269,9 +189,10 @@ class GeminiProvider(Provider):
         except ImportError:
             return False
 
-    # The Gemini free tier allows only ~5 requests/minute, and one agent
-    # turn costs at least two (plan + answer), so a 429 is expected
-    # rather than exceptional. Retry with the delay the server suggests.
+    # The Gemini free tier allows only ~5 requests/minute and ~20/day,
+    # and one agent turn costs at least two requests (plan + answer), so
+    # a 429 is expected rather than exceptional. Retry with the delay
+    # the server suggests.
     MAX_RETRIES = int(os.environ.get("GEMINI_MAX_RETRIES", "3"))
 
     @staticmethod
@@ -285,7 +206,7 @@ class GeminiProvider(Provider):
         m = re.search(r"retryDelay['\"]?\s*:\s*['\"]?(\d+)", str(exc))
         if m:
             return min(float(m.group(1)), 70.0)
-        return min(2.0 ** attempt, 30.0)
+        return min(2.0**attempt, 30.0)
 
     def complete(self, system, messages, tools, max_tokens=1024) -> TurnResult:
         import time
@@ -296,7 +217,7 @@ class GeminiProvider(Provider):
         client = genai.Client(api_key=self.api_key)
 
         # Translate the neutral message list into Gemini contents.
-        contents: list[dict[str, Any]] = []
+        contents: list[Any] = []
         for m in messages:
             role = m.get("role")
             content = m.get("content")
@@ -304,7 +225,7 @@ class GeminiProvider(Provider):
                 contents.append({"role": "user", "parts": [{"text": content}]})
                 continue
             if role == "user" and isinstance(content, list):
-                # Neutral tool_result blocks.
+                # Neutral tool_result blocks -> function_response parts.
                 parts = []
                 for block in content:
                     if block.get("type") == "tool_result":
@@ -314,15 +235,13 @@ class GeminiProvider(Provider):
                         except Exception:
                             parsed = {"raw": payload}
                         parts.append(
-                            {
-                                "function_response": {
-                                    "name": block.get("name", "tool"),
-                                    "response": parsed if isinstance(parsed, dict) else {"result": parsed},
-                                }
-                            }
+                            types.Part.from_function_response(
+                                name=block.get("name", "tool"),
+                                response=parsed if isinstance(parsed, dict) else {"result": parsed},
+                            )
                         )
                 if parts:
-                    contents.append({"role": "user", "parts": parts})
+                    contents.append(types.Content(role="user", parts=parts))
                 continue
             if role == "assistant" and isinstance(content, list):
                 # Neutral assistant blocks: text + tool_use.
@@ -422,8 +341,6 @@ class GeminiProvider(Provider):
 # ---------------------------------------------------------------------------
 
 _PROVIDERS: dict[str, type[Provider]] = {
-    "anthropic": AnthropicProvider,
-    "claude": AnthropicProvider,
     "gemini": GeminiProvider,
     "google": GeminiProvider,
 }
@@ -441,35 +358,34 @@ def available_providers() -> dict[str, bool]:
 
 
 def get_provider(name: Optional[str] = None) -> Optional[Provider]:
-    """Return the configured provider, or None if none is usable.
+    """Return the configured provider, or None for demo mode.
 
-    ``LLM_PROVIDER`` may be ``anthropic``, ``gemini``, or ``auto``. In
-    ``auto`` mode we prefer Anthropic, then Gemini, then None (which
-    makes the orchestrator fall back to demo mode).
+    ``LLM_PROVIDER`` may be ``gemini`` (default) or ``none``. Unknown
+    values raise, so a typo is loud rather than silently degrading to
+    demo mode.
     """
-    name = (name or os.environ.get("LLM_PROVIDER") or "auto").strip().lower()
+    name = (name or os.environ.get("LLM_PROVIDER") or DEFAULT_PROVIDER).strip().lower()
 
     if name in ("none", "off", "disabled"):
         return None
 
-    if name == "auto":
-        for candidate in ("anthropic", "gemini"):
-            cls = _PROVIDERS[candidate]
-            inst = cls()
-            if inst.available():
-                log.info("LLM provider: %s (auto-selected)", inst.name)
-                return inst
-        log.info("no LLM provider available; orchestrator will use demo mode")
-        return None
+    # Tolerate the old 'auto' value: with one provider it means 'gemini
+    # if a key is present, otherwise demo mode'.
+    if name in ("auto", "default"):
+        name = DEFAULT_PROVIDER
 
     cls = _PROVIDERS.get(name)
     if cls is None:
         raise ValueError(
             f"unknown LLM_PROVIDER {name!r}; expected one of "
-            f"{sorted(set(_PROVIDERS))} or 'auto'"
+            f"{sorted(set(_PROVIDERS)) + ['none']}"
         )
     inst = cls()
     if not inst.available():
-        log.warning("LLM_PROVIDER=%s requested but not available (missing key or SDK)", name)
+        log.warning(
+            "LLM_PROVIDER=%s requested but not available (missing GEMINI_API_KEY "
+            "or the google-genai SDK); the orchestrator will use demo mode",
+            name,
+        )
         return None
     return inst
