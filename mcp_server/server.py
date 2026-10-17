@@ -106,7 +106,12 @@ def _mcp_callable(tool_obj: Any, default_tenant: str) -> Callable[..., Any]:
 
     @functools.wraps(fn)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
-        return fn(*args, **kwargs)
+        bound = dict(kwargs)
+        if has_tenant and "tenant" not in bound and default_tenant is not None:
+            bound["tenant"] = default_tenant
+        elif not has_tenant and "tenant" in bound:
+            bound.pop("tenant", None)
+        return fn(*args, **bound)
 
     # Give the SDK the resolved signature AND the resolved annotations.
     resolved_sig = sig.replace(parameters=params, return_annotation=dict)
@@ -185,6 +190,21 @@ def list_registered_tools(server: Any) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
+class _StubTool:
+    """Minimal tool descriptor mirroring FastMCP's Tool object."""
+
+    def __init__(self, name: str, fn: Callable[..., Any], description: str = "") -> None:
+        self.name = name
+        self.fn = fn
+        self.description = description
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return f"<Tool name={self.name!r}>"
+
+
 class _StubServer:
     """Minimal stand-in so imports never fail without the MCP SDK."""
 
@@ -204,7 +224,7 @@ class _StubServer:
         return deco
 
     async def list_tools(self):
-        return list(self._tools)
+        return [_StubTool(name, fn) for name, fn in self._tools.items()]
 
     async def call_tool(self, name: str, arguments: dict[str, Any]):
         if name not in self._tools:

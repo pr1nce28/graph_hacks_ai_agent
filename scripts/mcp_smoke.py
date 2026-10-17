@@ -31,7 +31,8 @@ async def _run() -> int:
     tools = await server.list_tools()
     names = []
     for t in tools:
-        names.append(getattr(t, "name", getattr(t, "title", str(t))))
+        name = getattr(t, "name", None) or (t if isinstance(t, str) else str(t))
+        names.append(str(name))
     names = sorted(names)
     print(f"tools advertised: {len(names)}")
     for n in names:

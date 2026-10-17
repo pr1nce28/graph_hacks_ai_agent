@@ -148,3 +148,8 @@ Tool
 
 Demo question
     All 5 (every question starts by finding an entry node).
+
+Notes
+    FalkorDB's signature is
+    ``db.idx.vector.queryNodes(label, attribute, k, query)`` and the
+    query vector must be wrapped in ``vecf32()``.

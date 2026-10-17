@@ -183,5 +183,5 @@ live API for real numbers.)
 - **Phase 5** — load test, baseline (graph-necessity proof). ✅
 - **Phase 6** — submission. 🚧
 
-See `BUILD_LIST.md` for the full task list with IDs and
+See `docs/BUILD_LIST.md` for the full task list with IDs and
 `docs/CYPHER.md` for the canonical queries.

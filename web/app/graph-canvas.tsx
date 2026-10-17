@@ -136,7 +136,7 @@ export function GraphCanvas({ paths, onSelect, selectedId }: Props) {
         {edges.map((e, i) => {
           const a = nodes.get(e.source);
           const b = nodes.get(e.target);
-          if (!a || !b || a.x == null || b.x == null) return null;
+          if (!a || !b || a.x == null || b.x == null || a.y == null || b.y == null) return null;
           const isHovered =
             hoveredEdge &&
             hoveredEdge.source === e.source &&

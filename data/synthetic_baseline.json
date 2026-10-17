@@ -1,0 +1,151 @@
+[
+  {
+    "id": "q1_decision_provenance",
+    "question": "Why did we choose Postgres over Mongo for the new payments service?",
+    "expected_facts": [
+      "Postgres",
+      "Mongo",
+      "payments",
+      "decided_at"
+    ],
+    "vector_only": {
+      "ok": false,
+      "reason": "vector store cannot reconstruct traversal/path/SUPERSEDES",
+      "rows": [
+        {
+          "node": {
+            "created_at": 1700000000,
+            "text": "KYC vendor selection. Lorem ipsum synthetic body for 0.",
+            "title": "KYC vendor selection",
+            "id": "doc_000",
+            "label": "Document",
+            "labels": [
+              "Document"
+            ],
+            "name": "KYC vendor selection"
+          },
+          "score": 0.5
+        }
+      ]
+    },
+    "graph_required": true
+  },
+  {
+    "id": "q2_impact_analysis",
+    "question": "If we change the auth service, which teams and services are affected?",
+    "expected_facts": [
+      "auth",
+      "Team"
+    ],
+    "vector_only": {
+      "ok": false,
+      "reason": "vector store cannot reconstruct traversal/path/SUPERSEDES",
+      "rows": [
+        {
+          "node": {
+            "created_at": 1700000000,
+            "text": "KYC vendor selection. Lorem ipsum synthetic body for 0.",
+            "title": "KYC vendor selection",
+            "id": "doc_000",
+            "label": "Document",
+            "labels": [
+              "Document"
+            ],
+            "name": "KYC vendor selection"
+          },
+          "score": 0.5
+        }
+      ]
+    },
+    "graph_required": true
+  },
+  {
+    "id": "q3_ownership_vs_expertise",
+    "question": "Who really owns the billing service? The team on paper or the person who has actually done the work?",
+    "expected_facts": [
+      "billing",
+      "Team",
+      "Person"
+    ],
+    "vector_only": {
+      "ok": false,
+      "reason": "vector store cannot reconstruct traversal/path/SUPERSEDES",
+      "rows": [
+        {
+          "node": {
+            "created_at": 1700000000,
+            "text": "KYC vendor selection. Lorem ipsum synthetic body for 0.",
+            "title": "KYC vendor selection",
+            "id": "doc_000",
+            "label": "Document",
+            "labels": [
+              "Document"
+            ],
+            "name": "KYC vendor selection"
+          },
+          "score": 0.5
+        }
+      ]
+    },
+    "graph_required": true
+  },
+  {
+    "id": "q4_memory_supersede",
+    "question": "Did the launch deadline change since last week?",
+    "expected_facts": [
+      "deadline",
+      "Nov 30"
+    ],
+    "vector_only": {
+      "ok": false,
+      "reason": "vector store cannot reconstruct traversal/path/SUPERSEDES",
+      "rows": [
+        {
+          "node": {
+            "created_at": 1700000000,
+            "text": "KYC vendor selection. Lorem ipsum synthetic body for 0.",
+            "title": "KYC vendor selection",
+            "id": "doc_000",
+            "label": "Document",
+            "labels": [
+              "Document"
+            ],
+            "name": "KYC vendor selection"
+          },
+          "score": 0.5
+        }
+      ]
+    },
+    "graph_required": true
+  },
+  {
+    "id": "q5_multi_agent_handoff",
+    "question": "Notify everyone affected by the auth change that the launch moved to Nov 30.",
+    "expected_facts": [
+      "auth",
+      "Nov 30",
+      "ticket"
+    ],
+    "vector_only": {
+      "ok": false,
+      "reason": "vector store cannot reconstruct traversal/path/SUPERSEDES",
+      "rows": [
+        {
+          "node": {
+            "created_at": 1700000000,
+            "text": "KYC vendor selection. Lorem ipsum synthetic body for 0.",
+            "title": "KYC vendor selection",
+            "id": "doc_000",
+            "label": "Document",
+            "labels": [
+              "Document"
+            ],
+            "name": "KYC vendor selection"
+          },
+          "score": 0.5
+        }
+      ]
+    },
+    "graph_required": true
+  }
+]

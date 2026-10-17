@@ -51,7 +51,7 @@ def test_all_registry_tools_are_advertised():
 
     server = build_server()
     advertised = _run(server.list_tools())
-    names = {getattr(t, "name", getattr(t, "title", str(t))) for t in advertised}
+    names = {getattr(t, "name", None) or (t if isinstance(t, str) else str(t)) for t in advertised}
 
     expected = {t.name for t in REGISTRY}
     missing = expected - names
@@ -72,7 +72,7 @@ def test_optional_annotations_resolve():
     builder (they did before the type hints were resolved)."""
     server = build_server()
     advertised = _run(server.list_tools())
-    names = {getattr(t, "name", getattr(t, "title", str(t))) for t in advertised}
+    names = {getattr(t, "name", None) or (t if isinstance(t, str) else str(t)) for t in advertised}
     # These four are exactly the ones that used to fail registration.
     for name in ("search_entities", "get_neighbors", "create_ticket", "draft_message"):
         assert name in names
