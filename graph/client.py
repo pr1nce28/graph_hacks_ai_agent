@@ -28,6 +28,7 @@ import logging
 import os
 import threading
 from typing import List, Optional
+from urllib.parse import unquote, urlparse
 
 log = logging.getLogger("orgmind.graph.client")
 
@@ -65,6 +66,10 @@ FALKORDB_HOST: str = os.environ.get("FALKORDB_HOST", "localhost")
 FALKORDB_PORT: int = int(os.environ.get("FALKORDB_PORT", "6379"))
 FALKORDB_USERNAME: Optional[str] = os.environ.get("FALKORDB_USERNAME") or None
 FALKORDB_PASSWORD: Optional[str] = os.environ.get("FALKORDB_PASSWORD") or None
+# A rediss:// URL takes precedence over the individual fields above.
+FALKORDB_URL: Optional[str] = os.environ.get("FALKORDB_URL") or None
+# Force TLS (cloud instances usually need it).
+FALKORDB_TLS: bool = (os.environ.get("FALKORDB_TLS", "false").strip().lower() in ("1", "true", "yes"))
 
 # Phase 0 seed tenants. Extend in later phases (e.g. by reading a tenants
 # manifest or the FastAPI ``GET /tenants`` handler that calls us).
@@ -102,7 +107,7 @@ def _build_client():
     # import graph; redis is transitive through falkordb.
     from redis import BlockingConnectionPool
 
-    pool = BlockingConnectionPool(
+    kwargs: dict = dict(
         host=FALKORDB_HOST,
         port=FALKORDB_PORT,
         username=FALKORDB_USERNAME,
@@ -110,6 +115,23 @@ def _build_client():
         max_connections=POOL_MAX_CONNECTIONS,
         decode_responses=True,
     )
+    # Cloud instances usually require TLS. Accept a rediss:// URL in
+    # FALKORDB_URL, or the explicit FALKORDB_TLS flag.
+    if FALKORDB_URL:
+        parsed = urlparse(FALKORDB_URL)
+        kwargs["host"] = parsed.hostname or kwargs["host"]
+        if parsed.port:
+            kwargs["port"] = parsed.port
+        if parsed.username:
+            kwargs["username"] = unquote(parsed.username)
+        if parsed.password:
+            kwargs["password"] = unquote(parsed.password)
+        if parsed.scheme == "rediss":
+            kwargs["ssl"] = True
+    if FALKORDB_TLS:
+        kwargs["ssl"] = True
+
+    pool = BlockingConnectionPool(**kwargs)
     client = _FalkorDB(connection_pool=pool)
     return client, pool
 
