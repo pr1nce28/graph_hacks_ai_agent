@@ -1872,17 +1872,7 @@
         "to_id": "svc_gateway"
       },
       {
-        "from_id": "svc_billing",
-        "rel": "DEPENDS_ON",
-        "to_id": "svc_auth"
-      },
-      {
         "from_id": "svc_payments",
-        "rel": "DEPENDS_ON",
-        "to_id": "svc_auth"
-      },
-      {
-        "from_id": "svc_ledger",
         "rel": "DEPENDS_ON",
         "to_id": "svc_auth"
       },

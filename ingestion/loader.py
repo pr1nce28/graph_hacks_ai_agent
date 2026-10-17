@@ -107,11 +107,12 @@ def load_tenant(tenant: str, payload: dict[str, Any]) -> LoadResult:
             graph.query(cypher, params={"id": cid, "props": props})
             nodes_added += 1
 
-    # 3. Edges.
+    # 3. Edges. Different edge types use different key names: most use
+    # from_id/to_id, but OWNS uses owner_id/owned_id.
     for rel_type, edges in payload.get("edges", {}).items():
         for e in edges:
-            from_id = e.get("from_id")
-            to_id = e.get("to_id")
+            from_id = e.get("from_id") or e.get("owner_id")
+            to_id = e.get("to_id") or e.get("owned_id")
             if not from_id or not to_id:
                 continue
             cypher = (

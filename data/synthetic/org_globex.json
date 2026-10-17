@@ -1,17 +1,11 @@
 {
   "decisions": [
     {
-      "affects_ids": [
-        "svc_payments"
-      ],
-      "based_on_ids": [
-        "msg_postgres_thread",
-        "doc_postgres_design",
-        "ticket_postgres_eval"
-      ],
+      "affects_ids": [],
+      "based_on_ids": [],
       "decided_at": 1700000000,
       "decider_id": "person_uma_hossain",
-      "id": "dec_postgres",
+      "id": "dec_000",
       "summary": "Pick Postgres for the new payments service after the bake-off.",
       "title": "Choose Postgres over Mongo"
     },
@@ -185,35 +179,11 @@
       "id": "doc_009",
       "text": "Architecture overview. Lorem ipsum synthetic body for 9.",
       "title": "Architecture overview"
-    },
-    {
-      "author_id": "person_uma_zima",
-      "created_at": 1700000000,
-      "id": "doc_postgres_design",
-      "text": "Bake-off results favour Postgres for the new payments service.",
-      "title": "Postgres vs Mongo design doc"
     }
   ],
   "edges": {
-    "ABOUT": [
-      {
-        "from_id": "fact_deadline_v1",
-        "rel": "ABOUT",
-        "to_id": "svc_payments"
-      },
-      {
-        "from_id": "fact_deadline_v2",
-        "rel": "ABOUT",
-        "to_id": "svc_payments"
-      }
-    ],
-    "AFFECTS": [
-      {
-        "from_id": "dec_postgres",
-        "rel": "AFFECTS",
-        "to_id": "svc_payments"
-      }
-    ],
+    "ABOUT": [],
+    "AFFECTS": [],
     "AUTHORED": [
       {
         "from_id": "person_xenia_vargas",
@@ -264,11 +234,6 @@
         "from_id": "person_uma_zima",
         "rel": "AUTHORED",
         "to_id": "doc_009"
-      },
-      {
-        "from_id": "person_uma_zima",
-        "rel": "AUTHORED",
-        "to_id": "doc_postgres_design"
       },
       {
         "from_id": "person_mila_tashkin",
@@ -329,11 +294,6 @@
         "from_id": "person_yara_diallo",
         "rel": "AUTHORED",
         "to_id": "ticket_011"
-      },
-      {
-        "from_id": "person_uma_zima",
-        "rel": "AUTHORED",
-        "to_id": "ticket_postgres_eval"
       },
       {
         "from_id": "person_xenia_vargas",
@@ -454,35 +414,14 @@
         "from_id": "person_mila_diallo",
         "rel": "AUTHORED",
         "to_id": "msg_023"
-      },
-      {
-        "from_id": "person_uma_zima",
-        "rel": "AUTHORED",
-        "to_id": "msg_postgres_thread"
       }
     ],
-    "BASED_ON": [
-      {
-        "from_id": "dec_postgres",
-        "rel": "BASED_ON",
-        "to_id": "msg_postgres_thread"
-      },
-      {
-        "from_id": "dec_postgres",
-        "rel": "BASED_ON",
-        "to_id": "doc_postgres_design"
-      },
-      {
-        "from_id": "dec_postgres",
-        "rel": "BASED_ON",
-        "to_id": "ticket_postgres_eval"
-      }
-    ],
+    "BASED_ON": [],
     "DECIDED": [
       {
         "from_id": "person_uma_hossain",
         "rel": "DECIDED",
-        "to_id": "dec_postgres"
+        "to_id": "dec_000"
       },
       {
         "from_id": "person_uma_zima",
@@ -575,21 +514,6 @@
         "from_id": "svc_kyc",
         "rel": "DEPENDS_ON",
         "to_id": "svc_payments"
-      },
-      {
-        "from_id": "svc_billing",
-        "rel": "DEPENDS_ON",
-        "to_id": "svc_auth"
-      },
-      {
-        "from_id": "svc_payments",
-        "rel": "DEPENDS_ON",
-        "to_id": "svc_auth"
-      },
-      {
-        "from_id": "svc_ledger",
-        "rel": "DEPENDS_ON",
-        "to_id": "svc_auth"
       }
     ],
     "MEMBER_OF": [
@@ -638,75 +562,70 @@
       {
         "from_id": "doc_000",
         "rel": "MENTIONS",
-        "to_id": "ticket_004"
+        "to_id": "ticket_001"
       },
       {
         "from_id": "doc_000",
         "rel": "MENTIONS",
-        "to_id": "ticket_005"
+        "to_id": "ticket_003"
       },
       {
         "from_id": "doc_001",
-        "rel": "MENTIONS",
-        "to_id": "ticket_011"
-      },
-      {
-        "from_id": "doc_001",
-        "rel": "MENTIONS",
-        "to_id": "doc_005"
-      },
-      {
-        "from_id": "doc_002",
-        "rel": "MENTIONS",
-        "to_id": "doc_005"
-      },
-      {
-        "from_id": "doc_002",
-        "rel": "MENTIONS",
-        "to_id": "ticket_postgres_eval"
-      },
-      {
-        "from_id": "doc_003",
-        "rel": "MENTIONS",
-        "to_id": "ticket_005"
-      },
-      {
-        "from_id": "doc_003",
         "rel": "MENTIONS",
         "to_id": "ticket_007"
       },
       {
-        "from_id": "doc_004",
+        "from_id": "doc_001",
         "rel": "MENTIONS",
-        "to_id": "doc_003"
+        "to_id": "ticket_007"
+      },
+      {
+        "from_id": "doc_002",
+        "rel": "MENTIONS",
+        "to_id": "ticket_011"
+      },
+      {
+        "from_id": "doc_002",
+        "rel": "MENTIONS",
+        "to_id": "ticket_001"
+      },
+      {
+        "from_id": "doc_003",
+        "rel": "MENTIONS",
+        "to_id": "ticket_006"
+      },
+      {
+        "from_id": "doc_003",
+        "rel": "MENTIONS",
+        "to_id": "doc_009"
       },
       {
         "from_id": "doc_004",
+        "rel": "MENTIONS",
+        "to_id": "ticket_001"
+      },
+      {
+        "from_id": "doc_004",
+        "rel": "MENTIONS",
+        "to_id": "doc_007"
+      },
+      {
+        "from_id": "doc_005",
         "rel": "MENTIONS",
         "to_id": "ticket_005"
       },
       {
         "from_id": "doc_005",
         "rel": "MENTIONS",
-        "to_id": "doc_004"
-      },
-      {
-        "from_id": "doc_005",
-        "rel": "MENTIONS",
-        "to_id": "ticket_010"
+        "to_id": "ticket_001"
       },
       {
         "from_id": "doc_006",
         "rel": "MENTIONS",
-        "to_id": "ticket_005"
+        "to_id": "ticket_004"
       },
       {
         "from_id": "doc_006",
-        "rel": "MENTIONS",
-        "to_id": "ticket_008"
-      },
-      {
-        "from_id": "doc_007",
         "rel": "MENTIONS",
         "to_id": "ticket_000"
       },
@@ -716,9 +635,14 @@
         "to_id": "doc_002"
       },
       {
+        "from_id": "doc_007",
+        "rel": "MENTIONS",
+        "to_id": "ticket_003"
+      },
+      {
         "from_id": "doc_008",
         "rel": "MENTIONS",
-        "to_id": "ticket_011"
+        "to_id": "ticket_006"
       },
       {
         "from_id": "doc_008",
@@ -728,38 +652,28 @@
       {
         "from_id": "doc_009",
         "rel": "MENTIONS",
-        "to_id": "doc_005"
-      },
-      {
-        "from_id": "doc_009",
-        "rel": "MENTIONS",
         "to_id": "doc_001"
       },
       {
-        "from_id": "doc_postgres_design",
+        "from_id": "ticket_000",
         "rel": "MENTIONS",
-        "to_id": "doc_003"
-      },
-      {
-        "from_id": "doc_postgres_design",
-        "rel": "MENTIONS",
-        "to_id": "ticket_011"
+        "to_id": "ticket_003"
       },
       {
         "from_id": "ticket_000",
         "rel": "MENTIONS",
-        "to_id": "ticket_010"
-      },
-      {
-        "from_id": "ticket_000",
-        "rel": "MENTIONS",
-        "to_id": "ticket_010"
+        "to_id": "ticket_005"
       }
     ],
     "OWNS": [
       {
         "owned_id": "svc_auth",
         "owner_id": "team_platform",
+        "rel": "OWNS"
+      },
+      {
+        "owned_id": "svc_billing",
+        "owner_id": "team_growth",
         "rel": "OWNS"
       },
       {
@@ -775,11 +689,6 @@
       {
         "owned_id": "svc_kyc",
         "owner_id": "team_growth",
-        "rel": "OWNS"
-      },
-      {
-        "owned_id": "svc_billing",
-        "owner_id": "team_payments",
         "rel": "OWNS"
       }
     ],
@@ -833,63 +742,10 @@
         "from_id": "person_kavi_ndlovu",
         "rel": "WORKED_ON",
         "to_id": "svc_kyc"
-      },
-      {
-        "from_id": "person_uma_zima",
-        "rel": "WORKED_ON",
-        "to_id": "svc_billing"
-      },
-      {
-        "from_id": "person_uma_zima",
-        "rel": "WORKED_ON",
-        "to_id": "svc_billing"
-      },
-      {
-        "from_id": "person_uma_zima",
-        "rel": "WORKED_ON",
-        "to_id": "svc_billing"
-      },
-      {
-        "from_id": "person_uma_zima",
-        "rel": "WORKED_ON",
-        "to_id": "svc_billing"
-      },
-      {
-        "from_id": "person_uma_zima",
-        "rel": "WORKED_ON",
-        "to_id": "svc_billing"
-      },
-      {
-        "from_id": "person_uma_zima",
-        "rel": "WORKED_ON",
-        "to_id": "svc_billing"
       }
     ]
   },
-  "facts": [
-    {
-      "about_ids": [
-        "svc_payments"
-      ],
-      "confidence": 1.0,
-      "id": "fact_deadline_v1",
-      "status": "superseded",
-      "text": "The launch deadline is Oct 31.",
-      "valid_from": 1700000000,
-      "valid_to": 1700500000
-    },
-    {
-      "about_ids": [
-        "svc_payments"
-      ],
-      "confidence": 1.0,
-      "id": "fact_deadline_v2",
-      "status": "active",
-      "text": "The launch deadline is Nov 30.",
-      "valid_from": 1700500000,
-      "valid_to": null
-    }
-  ],
+  "facts": [],
   "messages": [
     {
       "author_id": "person_xenia_vargas",
@@ -1058,13 +914,6 @@
       "id": "msg_023",
       "text": "Wait \u2014 has the ledger team signed off?",
       "ts": 1700013800
-    },
-    {
-      "author_id": "person_uma_zima",
-      "channel": "#payments",
-      "id": "msg_postgres_thread",
-      "text": "Postgres won the bake-off; rationale in the doc.",
-      "ts": 1700000000
     }
   ],
   "people": [
@@ -1271,14 +1120,6 @@
       "status": "in_progress",
       "text": "KYC timeout. Synthetic ticket body.",
       "title": "KYC timeout"
-    },
-    {
-      "author_id": "person_uma_zima",
-      "created_at": 1700000000,
-      "id": "ticket_postgres_eval",
-      "status": "done",
-      "text": "Run the bake-off and pick a database.",
-      "title": "Evaluate Postgres for new payments service"
     }
   ]
 }

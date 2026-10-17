@@ -163,7 +163,11 @@ def _services(rng: random.Random, count: int) -> list[dict[str, Any]]:
     return services
 
 
-def _depends_on(rng: random.Random, services: list[dict[str, Any]]) -> list[tuple[str, str]]:
+def _depends_on(
+    rng: random.Random,
+    services: list[dict[str, Any]],
+    plant_demo_answers: bool = True,
+) -> list[tuple[str, str]]:
     """Build a plausible dependency chain."""
     edges: list[tuple[str, str]] = []
     by_id = {s["id"]: s for s in services}
@@ -174,11 +178,13 @@ def _depends_on(rng: random.Random, services: list[dict[str, Any]]) -> list[tupl
             target = rng.choice(earlier)
             if target["id"] != svc["id"] and (svc["id"], target["id"]) not in edges:
                 edges.append((svc["id"], target["id"]))
+    if not plant_demo_answers:
+        return edges
     # Force svc_auth to have 4+ dependents across teams (demo Q2).
     auth_deps = ["svc_billing", "svc_payments", "svc_ledger", "svc_notify"]
     for tgt in auth_deps:
-        if tgt in by_id:
-            edges.append((tgt, svc["auth"] if "auth" in by_id else services[0]["id"]))
+        if tgt in by_id and (tgt, "svc_auth") not in edges:
+            edges.append((tgt, "svc_auth"))
     return edges
 
 
@@ -187,17 +193,19 @@ def _ownerships(
     services: list[dict[str, Any]],
     people: list[dict[str, Any]],
     teams: list[dict[str, Any]],
+    plant_demo_answers: bool = True,
 ) -> list[dict[str, Any]]:
     """Team OWNS Service. But svc_billing is owned by Team X on paper
     while person_y has most of the AUTHORED + WORKED_ON (demo Q3)."""
     out: list[dict[str, Any]] = []
     by_id_svc = {s["id"]: s for s in services}
-    by_id_team = {t["id"]: t for t in teams}
     for svc in services:
         team = rng.choice(teams)
         out.append({"owner_id": team["id"], "owned_id": svc["id"], "rel": "OWNS"})
+    if not plant_demo_answers:
+        return out
     # Pin svc_billing -> Team Payments for the ownership-vs-expertise gap.
-    if "svc_billing" in by_id_svc:
+    if "svc_billing" in by_id_svc and any(t["id"] == "team_payments" for t in teams):
         out = [e for e in out if not (e["owned_id"] == "svc_billing" and e["owner_id"] != "team_payments")]
         out.append({"owner_id": "team_payments", "owned_id": "svc_billing", "rel": "OWNS"})
     return out
@@ -207,6 +215,7 @@ def _people_links(
     rng: random.Random,
     services: list[dict[str, Any]],
     people: list[dict[str, Any]],
+    plant_demo_answers: bool = True,
 ) -> list[dict[str, Any]]:
     """AUTHORED + WORKED_ON edges.
 
@@ -214,21 +223,24 @@ def _people_links(
     it is owned by another team.
     """
     out: list[dict[str, Any]] = []
-    person_y = people[12] if len(people) > 12 else people[0]
     for svc in services:
         # Two random people WORKED_ON every service.
         for _ in range(2):
             p = rng.choice(people)
             out.append({"from_id": p["id"], "to_id": svc["id"], "rel": "WORKED_ON"})
+    if not plant_demo_answers:
+        return out
     # Plant: person_y has 6 WORKED_ON edges to svc_billing.
-    for _ in range(6):
-        out.append({"from_id": person_y["id"], "to_id": "svc_billing", "rel": "WORKED_ON"})
-    # Authored: doc and ticket generation happens elsewhere; here we add
-    # a few author links for the Documents / Tickets.
+    person_y = people[12] if len(people) > 12 else people[0]
+    if any(s["id"] == "svc_billing" for s in services):
+        for _ in range(6):
+            out.append({"from_id": person_y["id"], "to_id": "svc_billing", "rel": "WORKED_ON"})
     return out
 
 
-def _documents(rng: random.Random, count: int, people: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _documents(
+    rng: random.Random, count: int, people: list[dict[str, Any]], plant_demo_answers: bool = True
+) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for i in range(count):
         title = rng.choice(_DOC_TOPICS)
@@ -241,20 +253,23 @@ def _documents(rng: random.Random, count: int, people: list[dict[str, Any]]) -> 
                 "author_id": rng.choice(people)["id"],
             }
         )
-    # Plant a Postgres-vs-Mongo design doc for the Postgres decision.
-    out.append(
-        {
-            "id": "doc_postgres_design",
-            "title": "Postgres vs Mongo design doc",
-            "text": "Bake-off results favour Postgres for the new payments service.",
-            "created_at": 1_700_000_000,
-            "author_id": people[0]["id"],
-        }
-    )
+    if plant_demo_answers:
+        # Plant a Postgres-vs-Mongo design doc for the Postgres decision.
+        out.append(
+            {
+                "id": "doc_postgres_design",
+                "title": "Postgres vs Mongo design doc",
+                "text": "Bake-off results favour Postgres for the new payments service.",
+                "created_at": 1_700_000_000,
+                "author_id": people[0]["id"],
+            }
+        )
     return out
 
 
-def _tickets(rng: random.Random, count: int, people: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _tickets(
+    rng: random.Random, count: int, people: list[dict[str, Any]], plant_demo_answers: bool = True
+) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for i in range(count):
         title = rng.choice(_TICKET_TITLES)
@@ -268,21 +283,24 @@ def _tickets(rng: random.Random, count: int, people: list[dict[str, Any]]) -> li
                 "text": f"{title}. Synthetic ticket body.",
             }
         )
-    # Plant a ticket the Postgres decision was BASED_ON.
-    out.append(
-        {
-            "id": "ticket_postgres_eval",
-            "title": "Evaluate Postgres for new payments service",
-            "status": "done",
-            "created_at": 1_700_000_000,
-            "author_id": people[0]["id"],
-            "text": "Run the bake-off and pick a database.",
-        }
-    )
+    if plant_demo_answers:
+        # Plant a ticket the Postgres decision was BASED_ON.
+        out.append(
+            {
+                "id": "ticket_postgres_eval",
+                "title": "Evaluate Postgres for new payments service",
+                "status": "done",
+                "created_at": 1_700_000_000,
+                "author_id": people[0]["id"],
+                "text": "Run the bake-off and pick a database.",
+            }
+        )
     return out
 
 
-def _messages(rng: random.Random, count: int, people: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _messages(
+    rng: random.Random, count: int, people: list[dict[str, Any]], plant_demo_answers: bool = True
+) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     channels = ["#payments", "#platform", "#risk", "#mobile", "#growth"]
     for i in range(count):
@@ -295,20 +313,28 @@ def _messages(rng: random.Random, count: int, people: list[dict[str, Any]]) -> l
                 "author_id": rng.choice(people)["id"],
             }
         )
-    # Plant the Postgres slack thread as a Message.
-    out.append(
-        {
-            "id": "msg_postgres_thread",
-            "channel": "#payments",
-            "text": "Postgres won the bake-off; rationale in the doc.",
-            "ts": 1_700_000_000,
-            "author_id": people[0]["id"],
-        }
-    )
+    if plant_demo_answers:
+        # Plant the Postgres slack thread as a Message.
+        out.append(
+            {
+                "id": "msg_postgres_thread",
+                "channel": "#payments",
+                "text": "Postgres won the bake-off; rationale in the doc.",
+                "ts": 1_700_000_000,
+                "author_id": people[0]["id"],
+            }
+        )
     return out
 
 
-def _decisions(rng: random.Random, people: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _decisions(
+    rng: random.Random,
+    people: list[dict[str, Any]],
+    plant_demo_answers: bool = True,
+) -> list[dict[str, Any]]:
+    """Build the decision set. Only the primary tenant gets the planted
+    Postgres decision — the secondary tenant must NOT, or the
+    tenant-isolation demo breaks."""
     out: list[dict[str, Any]] = []
     for i, (title, summary) in enumerate(_DECISIONS):
         out.append(
@@ -322,6 +348,8 @@ def _decisions(rng: random.Random, people: list[dict[str, Any]]) -> list[dict[st
                 "affects_ids": [],
             }
         )
+    if not plant_demo_answers:
+        return out
     # Plant the Postgres decision with explicit BASED_ON + AFFECTS.
     dec_postgres = out[0]
     dec_postgres["id"] = "dec_postgres"
@@ -336,8 +364,10 @@ def _decisions(rng: random.Random, people: list[dict[str, Any]]) -> list[dict[st
     return out
 
 
-def _facts(rng: random.Random) -> list[dict[str, Any]]:
-    """Two contradicting facts for the memory demo."""
+def _facts(rng: random.Random, plant_demo_answers: bool = True) -> list[dict[str, Any]]:
+    """Two contradicting facts for the memory demo (primary tenant only)."""
+    if not plant_demo_answers:
+        return []
     return [
         {
             "id": "fact_deadline_v1",
@@ -399,17 +429,18 @@ def _build_tenant(
     rng: random.Random,
     tenant: str,
     counts: dict[str, int],
+    plant_demo_answers: bool = True,
 ) -> dict[str, Any]:
     people, teams = _people_and_teams(rng, counts["people"])
     services = _services(rng, counts["services"])
-    deps = _depends_on(rng, services)
-    owns = _ownerships(rng, services, people, teams)
-    people_links = _people_links(rng, services, people)
-    docs = _documents(rng, counts["documents"], people)
-    tickets = _tickets(rng, counts["tickets"], people)
-    msgs = _messages(rng, counts["messages"], people)
-    decisions = _decisions(rng, people)
-    facts = _facts(rng)
+    deps = _depends_on(rng, services, plant_demo_answers)
+    owns = _ownerships(rng, services, people, teams, plant_demo_answers)
+    people_links = _people_links(rng, services, people, plant_demo_answers)
+    docs = _documents(rng, counts["documents"], people, plant_demo_answers)
+    tickets = _tickets(rng, counts["tickets"], people, plant_demo_answers)
+    msgs = _messages(rng, counts["messages"], people, plant_demo_answers)
+    decisions = _decisions(rng, people, plant_demo_answers)
+    facts = _facts(rng, plant_demo_answers)
 
     # Author edges for docs/tickets
     authored = [{"from_id": d["author_id"], "to_id": d["id"], "rel": "AUTHORED"} for d in docs]
@@ -465,6 +496,7 @@ def generate(out_dir: Path | None = None) -> dict[str, dict[str, Any]]:
                 "tickets": 60,
                 "messages": 150,
             },
+            plant_demo_answers=True,
         ),
         "org_globex": _build_tenant(
             rng,
@@ -476,6 +508,7 @@ def generate(out_dir: Path | None = None) -> dict[str, dict[str, Any]]:
                 "tickets": 12,
                 "messages": 24,
             },
+            plant_demo_answers=False,  # isolated tenant: no Acme-specific planting
         ),
     }
 

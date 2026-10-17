@@ -38,6 +38,26 @@ def _allow(ip: str) -> bool:
     return True
 
 
+async def _drain_queue(
+    queue: asyncio.Queue[dict[str, Any]],
+    websocket: WebSocket,
+    poll_s: float = 0.05,
+) -> None:
+    """Forward every item currently in the queue, then any new ones
+    that arrive within ``poll_s`` seconds. Stops when the queue is empty
+    AND no new item has arrived for ``poll_s`` seconds.
+    """
+    while True:
+        try:
+            event = await asyncio.wait_for(queue.get(), timeout=poll_s)
+        except asyncio.TimeoutError:
+            return
+        try:
+            await websocket.send_json(event)
+        except Exception:
+            return
+
+
 @router.websocket("/ws/chat")
 async def ws_chat(websocket: WebSocket) -> None:
     """Stream orchestrator events for one turn.
@@ -65,39 +85,46 @@ async def ws_chat(websocket: WebSocket) -> None:
                 await websocket.send_json({"type": "error", "message": "missing 'question'"})
                 continue
 
+            from agents.orchestrator import Orchestrator
+
             queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
 
             def _enqueue(ev) -> None:
                 queue.put_nowait(ev.to_dict())
 
-            from agents.orchestrator import Orchestrator
-
             orchestrator = Orchestrator(tenant=tenant, on_event=_enqueue)
+            turn_task = asyncio.create_task(
+                asyncio.to_thread(orchestrator.call_turn, question, session)
+            )
 
-            turn_task = asyncio.create_task(asyncio.to_thread(orchestrator.call_turn, question, session))
+            # Forward events as the orchestrator produces them. The
+            # drain loop keeps going while either (a) the turn is
+            # still running or (b) the queue still has undelivered
+            # events. This avoids the race where the turn finishes
+            # before the WS has a chance to flush the queue.
+            while not turn_task.done() or not queue.empty():
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=0.05)
+                except asyncio.TimeoutError:
+                    continue
+                try:
+                    await websocket.send_json(event)
+                except Exception as exc:
+                    log.warning("ws send failed: %s", exc)
+                    turn_task.cancel()
+                    break
 
-            # Stream events until the turn completes.
-            done = False
-            while not done:
-                get, _ = await asyncio.wait(
-                    [
-                        asyncio.create_task(queue.get()),
-                        asyncio.create_task(turn_task),
-                    ],
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-                for task in get:
-                    if task.exception():
-                        log.warning("orchestrator turn error: %s", task.exception())
-                        continue
-                    res = task.result()
-                    if isinstance(res, dict):  # event from queue
-                        await websocket.send_json(res)
-                    else:
-                        done = True  # turn_task returned
-            await turn_task  # surface exceptions
+            try:
+                await turn_task
+            except Exception as exc:
+                log.warning("orchestrator turn error: %s", exc)
     except WebSocketDisconnect:
         log.info("ws client disconnected tenant=%s session=%s", tenant, session)
     except Exception as exc:
         log.exception("ws error: %s", exc)
         await websocket.close()
+
+
+def _serialise_tool_result(result: dict[str, Any]) -> str:
+    """Turn a GraphPath dict into the JSON string Claude expects."""
+    return json.dumps(result, default=str, separators=(",", ":"))

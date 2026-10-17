@@ -24,9 +24,12 @@ and without a running ``docker compose up``.
 
 from __future__ import annotations
 
+import logging
 import os
 import threading
 from typing import List, Optional
+
+log = logging.getLogger("orgmind.graph.client")
 
 # FalkorDB is a runtime dep declared in pyproject.toml. We import it here
 # at module load so type annotations / re-exports work, but wrap the import
@@ -75,6 +78,9 @@ DEFAULT_TENANTS: List[str] = ["org_acme", "org_globex"]
 _client_lock = threading.Lock()
 _client = None  # type: ignore[var-annotated]
 _pool = None  # type: ignore[var-annotated]
+# Cache of in-memory dev graphs, one per tenant (only used when FalkorDB
+# is unavailable or USE_DEV_GRAPH=true).
+_dev_graphs: dict[str, object] = {}
 
 
 def _build_client():
@@ -157,36 +163,74 @@ def list_tenants() -> List[str]:
     return tenants
 
 
-def get_graph(tenant: str) -> FalkorDBGraph:
-    """Return a FalkorDB ``Graph`` scoped to ``tenant``.
+def _dev_mode() -> str:
+    """Return the configured dev-graph mode: ``auto`` | ``true`` | ``false``."""
+    return (os.environ.get("USE_DEV_GRAPH") or "auto").strip().lower()
 
-    The returned object shares the module-level connection pool with every
-    other tenant graph; isolation is enforced on the FalkorDB server (one
-    graph per tenant) per SCHEMA.md §Tenant model and CONTRACTS §7.
+
+def _get_dev_graph(tenant: str):
+    """Lazily build (and cache) the in-memory dev graph for ``tenant``."""
+    global _dev_graphs
+    if tenant not in _dev_graphs:
+        from graph.dev_backend import load_dev_graph
+
+        _dev_graphs[tenant] = load_dev_graph(tenant)
+    return _dev_graphs[tenant]
+
+
+def get_graph(tenant: str):
+    """Return a graph handle scoped to ``tenant``.
+
+    Resolution order:
+
+    1. ``USE_DEV_GRAPH=true``  -> in-memory dev graph (no FalkorDB needed).
+    2. ``USE_DEV_GRAPH=false`` -> real FalkorDB; raises if unreachable.
+    3. ``auto`` (default)      -> try FalkorDB; on connection failure fall
+       back to the in-memory dev graph and log a warning.
+
+    The dev graph is a *development fallback* so the project runs on a
+    machine without Docker. FalkorDB remains the production graph store.
 
     Args:
-        tenant: FalkorDB graph name (e.g. ``"org_acme"``). Required to be
-            a non-empty string.
+        tenant: graph name (e.g. ``"org_acme"``); non-empty string.
 
     Returns:
-        FalkorDBGraph: a ``falkordb.Graph`` object on which ``.query(...)``
-        and ``.ro_query(...)`` can be issued.
+        A graph object with a ``.query(cypher, params=...)`` method.
 
     Raises:
         ValueError: if ``tenant`` is not a non-empty string.
-        ImportError: if the ``falkordb`` package is not installed in the
-            current environment (no network is attempted in that case).
-        redis.exceptions.ConnectionError / TimeoutError: if FalkorDB is
-            unreachable at :data:`FALKORDB_HOST`/:data:`FALKORDB_PORT`
-            at query time.
+        ImportError: if ``USE_DEV_GRAPH=false`` and ``falkordb`` is missing.
     """
-    if not _FALKORDB_AVAILABLE:
-        raise ImportError(
-            "falkordb is not installed. Install it with "
-            "`pip install FalkorDB` (it's declared in pyproject.toml)."
-        )
     if not isinstance(tenant, str) or not tenant:
-        raise ValueError(
-            f"tenant must be a non-empty string, got {tenant!r}"
+        raise ValueError(f"tenant must be a non-empty string, got {tenant!r}")
+
+    mode = _dev_mode()
+    if mode in ("1", "true", "yes", "dev"):
+        return _get_dev_graph(tenant)
+
+    if not _FALKORDB_AVAILABLE:
+        if mode == "false":
+            raise ImportError(
+                "falkordb is not installed and USE_DEV_GRAPH=false. "
+                "Install it with `pip install FalkorDB` (declared in pyproject.toml)."
+            )
+        log.warning("falkordb not installed; using in-memory dev graph for %s", tenant)
+        return _get_dev_graph(tenant)
+
+    try:
+        graph = _get_client().select_graph(tenant)
+        # Force a connection now so an unreachable server surfaces here
+        # rather than at first query time.
+        graph.query("RETURN 1")
+        return graph
+    except Exception as exc:
+        if mode == "false":
+            raise
+        log.warning(
+            "FalkorDB unreachable at %s:%s (%s); using in-memory dev graph for %s",
+            FALKORDB_HOST,
+            FALKORDB_PORT,
+            type(exc).__name__,
+            tenant,
         )
-    return _get_client().select_graph(tenant)
+        return _get_dev_graph(tenant)
