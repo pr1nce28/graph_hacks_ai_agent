@@ -1,0 +1,62 @@
+# Architecture Diagram (text source)
+
+> P6-C-02. The repo ships an ASCII architecture diagram in this file
+> and a generated PNG at `docs/architecture.png`. The PNG is generated
+> by `scripts/render_architecture.py` using matplotlib (no browser
+> required); both forms live in the repo so judges who cannot view
+> PNGs in their terminal still get the picture.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Next.js UI (web/)                                          │
+│  Chat │ Live Graph Canvas │ Path Panel │ Memory │ Timeline   │
+└───────────────▲──────────────────────────┬──────────────────┘
+                │ WebSocket (events)       │ REST (tenants, health)
+┌───────────────┴──────────────────────────▼──────────────────┐
+│  FastAPI  (api/) — rate limit, read-only demo mode          │
+│  └─ Orchestrator Agent (Claude tool-use)                    │
+│       ├─ Analyst Agent    (graph reasoning, read-only)     │
+│       ├─ Ingestion Agent  (LLM structured extraction)      │
+│       └─ Action Agent     (drains Handoff / Task nodes)     │
+└───────────────┬─────────────────────────────────────────────┘
+                │ tool calls (in-process or via MCP)
+┌───────────────▼─────────────────────────────────────────────┐
+│  Tool Registry  (tools/registry.py)                         │
+│  graph tools │ memory tools │ action tools │ coordination   │
+│        ▲▲▲                                                   │
+│        └└└ also exposed by MCP Server (mcp_server/)         │
+└───────────────┬─────────────────────────────────────────────┘
+                │ Cypher + vector queries + graph algorithms
+┌───────────────▼─────────────────────────────────────────────┐
+│  Memory layer (memory/)                                     │
+│   semantic.py  — Fact + SUPERSEDES                          │
+│   episodic.py  — Episode + TOUCHED                          │
+│   procedural.py — Procedure (success_count)                 │
+│   coordination.py — Agent + Task + Handoff                  │
+└───────────────┬─────────────────────────────────────────────┘
+                │ MERGE / MATCH / vector query
+┌───────────────▼─────────────────────────────────────────────┐
+│  Graph layer (graph/)                                       │
+│   client.py    — get_graph(tenant), shared pool            │
+│   queries.py   — every Cypher (parameterised, named)        │
+│   embeddings.py — sentence-transformers (384-d, cached)     │
+└───────────────┬─────────────────────────────────────────────┘
+                │
+┌───────────────▼─────────────────────────────────────────────┐
+│  FalkorDB: one graph per tenant                             │
+│   org_acme   = company knowledge + agent memory + tasks     │
+│   org_globex = isolated second tenant                       │
+│   (vectors, indexes, PageRank, shortest path all in-DB)     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Generating the PNG
+
+```bash
+pip install matplotlib
+python scripts/render_architecture.py
+# writes docs/architecture.png
+```
+
+The script writes the same diagram with boxes drawn by matplotlib so
+the PNG is suitable for the README and the slide deck.
