@@ -153,6 +153,7 @@ live API for real numbers.)
   template (`.github/PULL_REQUEST_TEMPLATE.md`).
 * Third-party libraries listed in `THIRD_PARTY.md`.
 * Licence: MIT (`LICENSE`).
+* Explain-the-code drill: `docs/CONTRIBUTIONS.md`.
 * 18-rule gate: `docs/SUBMISSION_CHECKLIST.md`.
 
 ## Status
