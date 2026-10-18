@@ -1,0 +1,28 @@
+# Line endings.
+#
+# Shell scripts MUST keep LF, or they fail on macOS/Linux with
+# "bad interpreter: No such file or directory". Windows batch files are
+# happiest with CRLF. Git's autocrlf would otherwise rewrite these on
+# checkout and silently break the scripts for whoever clones next.
+
+*.sh   text eol=lf
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+
+# Everything else normalises to LF in the repo; git converts per the
+# platform on checkout.
+* text=auto
+
+# Binary assets: never touch.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.woff binary
+*.woff2 binary
+*.mp4  binary
+
+# Lockfiles: keep them out of diffs.
+package-lock.json -diff linguist-generated
