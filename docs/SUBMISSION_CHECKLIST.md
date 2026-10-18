@@ -14,7 +14,7 @@
 | 7 | Window 15 Oct 00:01 to 18 Oct 23:59 IST | Internal deadline Sun 20:00; submission targeted before 23:59 | ☑ |
 | 8 | Main coding starts after the start | Repo created inside the window; only planning docs pre-window (the original two `.md` files were planning material) | ☑ |
 | 9 | Libraries, APIs, templates allowed; original work judged | `THIRD_PARTY.md` lists everything | ☑ |
-| 10 | Public repo, README, Cypher doc, video, deploy, track | All linked from README; Cypher doc generated; demo script in `docs/demo_script.md`; local setup documented | ☑ |
+| 10 | Public repo, README, Cypher doc, video, deploy, track | Repo public; README links every artefact; `docs/CYPHER.md` generated; **no live deployment — complete local setup in `docs/SETUP.md`**, which rule 10 permits; tracks named in the README header. **Demo video still to be recorded.** | ☐ |
 | 11 | Disclose AI coding assistants | `docs/AI_DISCLOSURE.md` + PR template field | ☑ |
 | 12 | Explain model, queries, architecture, decisions | `P6-ALL-02` drill; `docs/CONTRIBUTIONS.md` | ☑ |
 | 13 | Not entirely AI-generated; meaningful contribution | Each query hand-tested in Browser (skipped locally); tests in `tests/` (41 pass) | ☑ |

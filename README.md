@@ -5,8 +5,22 @@
 > and context layer.
 
 **Tracks entered:** Agents That Act on Connected Data · Agent Memory and Coordination · Company Brain
-**Live demo:** _(P5; not deployed in this submission — local Docker is the supported setup)_
-**Demo video:** see `docs/demo_script.md` (P6-C-03)
+
+**Run it — no hosting required.** Rule 10 accepts complete local setup
+instructions in place of a live deployment, and this project is built to
+run that way: no Docker and no API key are needed to see it work.
+
+```bash
+git clone https://github.com/pr1nce28/graph_hacks_ai_agent
+cd graph_hacks_ai_agent
+setup.bat          # Windows      (macOS/Linux: chmod +x setup.sh && ./setup.sh)
+run.bat            # then open http://localhost:3000
+```
+
+Full prerequisites and every option: **[docs/SETUP.md](docs/SETUP.md)**.
+
+**Demo video:** _pending — the shot-by-shot script is in
+[`docs/demo_script.md`](docs/demo_script.md)._
 **Data:** fully synthetic, fixed seed; no real or private data.
 
 ---
