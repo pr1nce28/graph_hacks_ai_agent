@@ -1,3 +1,73 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html.dark,
+  html.dark body {
+    background-color: #020617;
+    color: #f1f5f9;
+  }
+
+  html.theme-spiderman,
+  html.theme-spiderman body {
+    color-scheme: light;
+    background-color: #f8fafc;
+    color: #0f172a;
+    background-image: radial-gradient(rgba(226, 54, 54, 0.05) 1px, transparent 1px),
+      radial-gradient(rgba(30, 64, 175, 0.04) 1px, transparent 1px);
+    background-size: 28px 28px;
+    background-position: 0 0, 14px 14px;
+  }
+
+  html,
+  body {
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.011em;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  html.dark ::selection {
+    background-color: rgba(0, 113, 227, 0.35);
+    color: #ffffff;
+  }
+
+  html.theme-spiderman ::selection {
+    background-color: rgba(226, 54, 54, 0.25);
+    color: #991b1b;
+  }
+
+  /* Minimalist scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  html.dark ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.16);
+    border-radius: 9999px;
+  }
+
+  html.dark ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.28);
+  }
+
+  html.theme-spiderman ::-webkit-scrollbar-thumb {
+    background: rgba(226, 54, 54, 0.25);
+    border-radius: 9999px;
+  }
+
+  html.theme-spiderman ::-webkit-scrollbar-thumb:hover {
+    background: rgba(226, 54, 54, 0.5);
+  }
+}
