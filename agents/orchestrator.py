@@ -278,7 +278,8 @@ class Orchestrator:
                 # A provider failure (quota exhausted, network, bad key)
                 # must not leave the user staring at "Thinking…". Fall
                 # back to the deterministic demo plan, which still uses
-                # the real tools and the real graph, and say so.
+                # the real tools and the real graph, and say why.
+                reason = _classify_provider_error(exc)
                 log.warning(
                     "LLM provider %s failed (%s: %s); falling back to demo mode",
                     provider.name,
@@ -287,7 +288,7 @@ class Orchestrator:
                 )
                 return self._demo_turn(
                     question,
-                    reason=f"LLM call failed ({type(exc).__name__}); showing the deterministic demo plan",
+                    reason=reason,
                     seen_tools=seen_tools,
                     session_id=session_id,
                 )
@@ -593,6 +594,45 @@ def _serialise_tool_result(result: dict[str, Any]) -> str:
     import json
 
     return json.dumps(result, default=str, separators=(",", ":"))
+
+
+def _classify_provider_error(exc: Exception) -> str:
+    """Turn a provider exception into a short, accurate reason.
+
+    The old wording told everyone to "set GEMINI_API_KEY", which is wrong
+    and confusing when the key is present and merely rate-limited. Say
+    what actually happened and what to do about it.
+    """
+    msg = str(exc)
+    if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+        import re
+
+        m = re.search(r"retryDelay['\"]?\s*:\s*['\"]?(\d+)", msg)
+        if m:
+            secs = int(m.group(1))
+            if secs >= 3600:
+                wait = f"about {secs // 3600}h"
+            elif secs >= 60:
+                wait = f"about {secs // 60}m"
+            else:
+                wait = f"{secs}s"
+            return (
+                f"the Gemini quota for this model is exhausted (retry in "
+                f"{wait}). Switch model with `python -m scripts.pick_gemini_model`, "
+                "or set LLM_PROVIDER=none to use demo mode deliberately"
+            )
+        return (
+            "the Gemini quota is exhausted. Switch model with "
+            "`python -m scripts.pick_gemini_model`, or set LLM_PROVIDER=none"
+        )
+    if "API key" in msg or "401" in msg or "403" in msg or "PERMISSION" in msg.upper():
+        return "the Gemini key was rejected — check GEMINI_API_KEY in .env"
+    if "404" in msg or "NOT_FOUND" in msg.upper():
+        return (
+            "that Gemini model is not available to this key. Pick one with "
+            "`python -m scripts.pick_gemini_model`"
+        )
+    return f"the LLM call failed ({type(exc).__name__})"
 
 
 def _summarise_tool_result(name: str, result: dict[str, Any]) -> str:
