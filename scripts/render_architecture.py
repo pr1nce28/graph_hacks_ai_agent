@@ -38,7 +38,7 @@ LAYERS = [
 ]
 
 
-def main() -> int:
+def main(out_path: Path | str | None = None) -> int:
     if not HAS_MPL:  # pragma: no cover
         print(
             "matplotlib not installed; skipping PNG render. "
@@ -84,10 +84,15 @@ def main() -> int:
                 arrowprops=dict(arrowstyle="-|>", color="#94a3b8", lw=1.2),
             )
 
-    out_path = Path(__file__).resolve().parent.parent / "docs" / "architecture.png"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=150, bbox_inches="tight")
-    print(f"Wrote {out_path}")
+    target = (
+        Path(out_path)
+        if out_path
+        else Path(__file__).resolve().parent.parent / "docs" / "architecture.png"
+    )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(target, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Wrote {target}")
     return 0
 
 

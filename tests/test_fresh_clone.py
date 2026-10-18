@@ -99,12 +99,12 @@ def test_check_graph_exits_zero_without_docker():
     assert "FalkorDB not reachable" in proc.stdout or "OK" in proc.stdout
 
 
-def test_render_architecture_writes_png():
+def test_render_architecture_writes_png(tmp_path):
     from scripts.render_architecture import main
 
-    rc = main()
+    out = tmp_path / "architecture.png"
+    rc = main(out)
     assert rc == 0
-    out = _REPO_ROOT / "docs" / "architecture.png"
     assert out.exists()
     assert out.stat().st_size > 1000
 
