@@ -191,12 +191,18 @@ class GeminiProvider(Provider):
 
     # The Gemini free tier allows only ~5 requests/minute and ~20/day,
     # and one agent turn costs at least two requests (plan + answer), so
-    # a 429 is expected rather than exceptional. Retry with the delay
-    # the server suggests.
-    MAX_RETRIES = int(os.environ.get("GEMINI_MAX_RETRIES", "3"))
+    # a 429 is expected rather than exceptional.
+    #
+    # On a per-minute limit the server suggests retrying in seconds and a
+    # retry is worth it. On a per-DAY limit it suggests retrying in
+    # hours; waiting is pointless for an interactive chat, so the delay
+    # is capped and, once retries are exhausted, the orchestrator falls
+    # back to demo mode instead of hanging the UI.
+    MAX_RETRIES = int(os.environ.get("GEMINI_MAX_RETRIES", "1"))
+    MAX_RETRY_DELAY_S = float(os.environ.get("GEMINI_MAX_RETRY_DELAY_S", "10"))
 
-    @staticmethod
-    def _retry_delay_s(exc: Exception, attempt: int) -> float:
+    @classmethod
+    def _retry_delay_s(cls, exc: Exception, attempt: int) -> float:
         """Seconds to wait before retrying a 429; -1 if not retryable."""
         code = getattr(exc, "code", None)
         if code != 429 and "429" not in str(exc):
@@ -204,9 +210,8 @@ class GeminiProvider(Provider):
         import re
 
         m = re.search(r"retryDelay['\"]?\s*:\s*['\"]?(\d+)", str(exc))
-        if m:
-            return min(float(m.group(1)), 70.0)
-        return min(2.0**attempt, 30.0)
+        delay = float(m.group(1)) if m else min(2.0**attempt, 30.0)
+        return min(delay, cls.MAX_RETRY_DELAY_S)
 
     def complete(self, system, messages, tools, max_tokens=1024) -> TurnResult:
         import time

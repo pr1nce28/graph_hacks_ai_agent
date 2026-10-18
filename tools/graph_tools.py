@@ -12,12 +12,15 @@ Tool catalogue (CONTRACTS §3):
 
 from __future__ import annotations
 
+import logging
+import time
 from typing import Any, Optional
 
 from graph.client import get_graph
 from graph.embeddings import embed_texts
+from graph.queries import QueryResult
+from graph.queries import _value_to_python as _flatten_node_value
 from graph.queries import (
-    QueryResult,
     q_centrality,
     q_find_experts,
     q_find_owner,
@@ -26,6 +29,8 @@ from graph.queries import (
     q_trace_decision,
 )
 from tools.registry import Tool
+
+log = logging.getLogger("orgmind.tools.graph")
 
 __all__ = [
     "search_entities",
@@ -123,6 +128,18 @@ def _fallback_search(graph: Any, labels: Optional[list[str]], k: int) -> QueryRe
     ) if not labels else QueryResult(rows=[], ms=0.0, cypher=cypher)
 
 
+# Relationship types that exist in the schema. `edge_types` is validated
+# against this set because it is interpolated into the pattern.
+_EDGE_TYPES = frozenset(
+    {
+        "MEMBER_OF", "OWNS", "AUTHORED", "WORKED_ON", "DEPENDS_ON",
+        "MENTIONS", "DECIDED", "BASED_ON", "SUPERSEDES", "AFFECTS",
+        "HAS_EPISODE", "TOUCHED", "ABOUT", "ASSIGNED_TO", "HANDED_OFF",
+        "TO", "FOR_TASK",
+    }
+)
+
+
 @Tool
 def get_neighbors(
     node_id: str,
@@ -130,28 +147,61 @@ def get_neighbors(
     depth: int = 2,
     edge_types: Optional[list[str]] = None,
 ) -> dict[str, Any]:
-    """Multi-hop expansion from ``node_id``. Returns neighbours up to ``depth`` hops."""
+    """Multi-hop expansion from ``node_id``. Returns neighbours up to ``depth`` hops.
+
+    Traverses in both directions; ``edge_types`` optionally restricts the
+    relationship types followed.
+    """
     graph = get_graph(tenant)
-    rel_filter = "|".join(edge_types) if edge_types else ""
-    rel_clause = f"-[r:{rel_filter}]-" if rel_filter else "-[r]-"
-    cypher = (
-        f"MATCH (n {{id: $id}})-{rel_clause}->(m) "
-        "WITH m, r LIMIT 200 "
-        "RETURN n, collect(DISTINCT {{rel: type(r), target: m, mid: m.id}}) AS neigh"
+    valid = [e for e in (edge_types or []) if e in _EDGE_TYPES]
+    rel_part = f":{'|'.join(valid)}" if valid else ""
+    hops = max(1, min(int(depth), 4))
+
+    # Outgoing and incoming are queried separately: a variable-length
+    # pattern needs a direction, and FalkorDB rejects an undirected one.
+    out_cypher = (
+        f"MATCH (n {{id: $id}})-[r{rel_part}*1..{hops}]->(m) "
+        "RETURN DISTINCT m AS node LIMIT 200"
     )
-    started = __import__("time").perf_counter()
-    raw = graph.query(cypher, params={"id": node_id})
-    rows = list(getattr(raw, "result_set", []) or [])
-    elapsed_ms = (__import__("time").perf_counter() - started) * 1000.0
-    path = {
-        "nodes": [{"id": node_id, "label": "Node", "name": node_id}],
-        "edges": [
-            {"source": node_id, "target": r[1]["mid"], "type": r[1]["rel"]}
-            for r in rows
-            if isinstance(r, list) and len(r) > 1 and isinstance(r[1], dict)
-        ],
+    in_cypher = (
+        f"MATCH (n {{id: $id}})<-[r{rel_part}*1..{hops}]-(m) "
+        "RETURN DISTINCT m AS node LIMIT 200"
+    )
+
+    started = time.perf_counter()
+    seen: dict[str, dict[str, Any]] = {}
+    edges: list[dict[str, Any]] = []
+    for cypher, direction in ((out_cypher, "out"), (in_cypher, "in")):
+        try:
+            raw = graph.query(cypher, params={"id": node_id})
+        except Exception as exc:
+            log.warning("get_neighbors %s failed: %s", direction, exc)
+            continue
+        for row in getattr(raw, "result_set", []) or []:
+            if not isinstance(row, (list, tuple)) or not row:
+                continue
+            node = _flatten_node_value(row[0])
+            nid = node.get("id")
+            if not nid or nid == node_id:
+                continue
+            seen[nid] = node
+            edges.append(
+                {
+                    "source": node_id if direction == "out" else nid,
+                    "target": nid if direction == "out" else node_id,
+                    "type": "RELATED",
+                }
+            )
+
+    elapsed_ms = (time.perf_counter() - started) * 1000.0
+    origin = {"id": node_id, "label": "Node", "name": node_id}
+    path = {"nodes": [origin, *seen.values()], "edges": edges}
+    return {
+        "result": {"count": len(seen), "edge_types": valid or "any", "depth": hops},
+        "path": path,
+        "cypher": out_cypher,
+        "ms": elapsed_ms,
     }
-    return {"result": {"count": len(rows)}, "path": path, "cypher": cypher, "ms": elapsed_ms}
 
 
 @Tool

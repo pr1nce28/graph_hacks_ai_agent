@@ -116,13 +116,24 @@ async def ws_chat(websocket: WebSocket) -> None:
 
             try:
                 await turn_task
+            except asyncio.CancelledError:
+                # The client went away mid-turn, or we cancelled it
+                # because the socket was no longer writable. Not an
+                # error, and it must not surface as an ASGI traceback.
+                log.info("turn cancelled (client disconnected?) session=%s", session)
             except Exception as exc:
                 log.warning("orchestrator turn error: %s", exc)
     except WebSocketDisconnect:
         log.info("ws client disconnected tenant=%s session=%s", tenant, session)
+    except asyncio.CancelledError:
+        log.info("ws cancelled tenant=%s session=%s", tenant, session)
+        raise
     except Exception as exc:
-        log.exception("ws error: %s", exc)
-        await websocket.close()
+        log.warning("ws error: %s", exc)
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 def _serialise_tool_result(result: dict[str, Any]) -> str:

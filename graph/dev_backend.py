@@ -215,7 +215,7 @@ class DevGraph:
             return self._h_q_find_owner
         if c.startswith("MATCH (e {id: $eid})<-[:OWNS]-(o)"):
             return self._h_q_find_owner
-        if "MATCH (n {id: $id})" in c and "RETURN n" in c:
+        if "MATCH (n {id: $id})" in c and "AS node" in c:
             return self._h_q_neighbors
         return None
 
@@ -596,16 +596,23 @@ class DevGraph:
         return DevResult([], [])
 
     def _h_q_neighbors(self, c: str, p: dict) -> DevResult:
+        """Mirror of tools.get_neighbors: directed, one row per neighbour.
+
+        The tool runs an outgoing query and an incoming query and merges
+        them; here we infer the direction from the pattern.
+        """
         nid = p.get("id")
-        n = self._nodes.get(nid)
-        if not n:
-            return DevResult(["n", "neigh"], [])
-        neigh = []
-        for r in self.rels_from(nid):
-            tgt = self._nodes.get(r["target"])
-            if tgt:
-                neigh.append({"rel": r["type"], "target": _node_view(tgt), "mid": r["target"]})
-        return DevResult(["n", "neigh"], [[_node_view(n), neigh]])
+        if nid not in self._nodes:
+            return DevResult(["node"], [])
+        outgoing = "]->(m)" in c
+        rels = self.rels_from(nid) if outgoing else self.rels_to(nid)
+        rows = []
+        for r in rels:
+            other = r["target"] if outgoing else r["source"]
+            node = self._nodes.get(other)
+            if node:
+                rows.append([_node_view(node)])
+        return DevResult(["node"], rows)
 
 
 # ---------------------------------------------------------------------------

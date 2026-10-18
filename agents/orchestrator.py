@@ -272,7 +272,25 @@ class Orchestrator:
 
         final_text = ""
         for step in range(self.max_tool_steps):
-            turn = provider.complete(system_prompt, messages, tools)
+            try:
+                turn = provider.complete(system_prompt, messages, tools)
+            except Exception as exc:
+                # A provider failure (quota exhausted, network, bad key)
+                # must not leave the user staring at "Thinking…". Fall
+                # back to the deterministic demo plan, which still uses
+                # the real tools and the real graph, and say so.
+                log.warning(
+                    "LLM provider %s failed (%s: %s); falling back to demo mode",
+                    provider.name,
+                    type(exc).__name__,
+                    exc,
+                )
+                return self._demo_turn(
+                    question,
+                    reason=f"LLM call failed ({type(exc).__name__}); showing the deterministic demo plan",
+                    seen_tools=seen_tools,
+                    session_id=session_id,
+                )
             final_text += turn.text
 
             if not turn.wants_tools:
@@ -528,12 +546,13 @@ class Orchestrator:
         else:
             cites = " ".join(f"[{i}]" for i in sorted(self._collected_ids)[:6])
             answer = (
-                "**Demo mode** (no LLM key set): the orchestrator ran a "
-                "deterministic plan against the live graph.\n\n"
+                "**Demo mode**: the orchestrator ran a deterministic plan "
+                "against the live graph. The tools, the traversal and the "
+                "citations below are real.\n\n"
                 + "\n".join(f"- {s}" for s in tool_summaries if s)
                 + f"\n\nCites: {cites}\n\n"
-                "_Set `GEMINI_API_KEY` and `LLM_PROVIDER=gemini` to replace "
-                f"this with model-planned reasoning. ({reason})_"
+                "_Model-planned reasoning needs `GEMINI_API_KEY` and "
+                f"`LLM_PROVIDER=gemini`. ({reason})_"
             )
 
         clean_text, dropped = _enforce_citations(answer, self._collected_ids)
