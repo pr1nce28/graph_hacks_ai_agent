@@ -31,16 +31,51 @@ The product covers all three tracks:
 
 ## Quickstart
 
-```bash
+**No Docker required** — the app falls back to an in-memory graph seeded
+from the synthetic data, and the agent runs in demo mode without an LLM
+key. Full prerequisites: **`docs/SETUP.md`**.
+
+### One command
+
+```bat
+:: Windows
 git clone https://github.com/pr1nce28/graph_hacks_ai_agent
 cd graph_hacks_ai_agent
+setup.bat
+run.bat
+```
 
+```bash
+# macOS / Linux
+git clone https://github.com/pr1nce28/graph_hacks_ai_agent
+cd graph_hacks_ai_agent
+chmod +x setup.sh && ./setup.sh
+./run.sh
+```
+
+Then open <http://localhost:3000>.
+
+### With Docker (real FalkorDB)
+
+```bash
 cp .env.example .env
 # put your GEMINI_API_KEY into .env (optional; see docs/LLM_KEYS.md)
 
-make up          # docker compose up -d — FalkorDB, FalkorDB Browser, API, Web
+make up          # docker compose up -d — FalkorDB, FalkorDB Browser, API, Web, MCP
 make seed        # loads synthetic Acme Payments + Globex tenants
-make dev-web     # or: cd web && npm install && npm run dev
+```
+
+Then open <http://localhost:3001>.
+
+### Manual
+
+```bash
+python -m venv .venv && .venv/Scripts/activate   # or source .venv/bin/activate
+pip install -e .
+cp .env.example .env
+cd web && npm install && cd ..
+python -m uvicorn api.main:app --port 8000       # terminal 1
+cd web && npm run dev                            # terminal 2
 ```
 
 Open:
