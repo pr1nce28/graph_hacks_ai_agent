@@ -18,7 +18,6 @@ dependencies = [
     "starlette>=0.40,<0.42",
     "uvicorn[standard]>=0.30",
     "pydantic>=2.7",
-    "sentence-transformers>=3.0",
     "pyyaml>=6.0",
     "httpx>=0.27",
     # MCP: 2.x renamed FastMCP -> MCPServer; mcp_server/server.py
@@ -27,6 +26,17 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Neural sentence embeddings. NOT required: graph/embeddings.py falls
+# back to a deterministic hashing embedding when this is absent, so
+# vector search still works and every demo question still answers.
+# Install it for better semantic ranking:
+#     pip install -e ".[ml]"
+# It is optional because it pulls PyTorch: ~2 GB and ~13 minutes on a
+# fresh install, against ~22 seconds for the core dependencies.
+ml = [
+    "sentence-transformers>=3.0",
+]
+
 dev = [
     "pytest>=8.0",
     "ruff>=0.5",

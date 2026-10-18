@@ -79,13 +79,35 @@ VENV_PY="$PWD/.venv/bin/python"
 # ---------------------------------------------------------------- python deps
 echo
 echo "[3/6] Installing Python dependencies..."
-echo "      (sentence-transformers pulls PyTorch; this can take a few minutes)"
+echo "      Core packages only - this takes well under a minute."
 "$VENV_PY" -m pip install --upgrade pip --quiet
 if ! "$VENV_PY" -m pip install -e . --quiet; then
     bad "pip install failed - scroll up for the reason"
     exit 1
 fi
-ok "Python dependencies installed"
+ok "core Python dependencies installed"
+
+# Neural embeddings are optional and pull PyTorch (~2 GB, ~13 min).
+echo
+echo "  Optional: neural sentence embeddings give better semantic search."
+echo "  Without them the app uses a deterministic hashing embedding, so"
+echo "  everything still works - ranking is just less precise."
+printf "  Install them now? [y/N] "
+read -r WANT_ML </dev/tty || WANT_ML=""
+case "$WANT_ML" in
+    [yY]*)
+        echo "  Installing sentence-transformers (this can take ~13 minutes)..."
+        if "$VENV_PY" -m pip install -e ".[ml]" --quiet; then
+            ok "neural embeddings installed"
+        else
+            warn "that failed; continuing without them."
+            echo "      Retry later: .venv/bin/python -m pip install -e '.[ml]'"
+        fi
+        ;;
+    *)
+        ok "skipping; using the hashing embedding fallback"
+        ;;
+esac
 
 # ---------------------------------------------------------------- web deps
 echo

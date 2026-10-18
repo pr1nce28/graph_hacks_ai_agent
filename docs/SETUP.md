@@ -43,12 +43,30 @@ orchestrator runs **demo mode**: deterministic plans executed against the
 real graph. In both cases the tools, the traversal and the citations are
 real.
 
-### Disk & network
+### Disk & time
 
-- **~1.5 GB** for Python + Node dependencies (sentence-transformers pulls
-  PyTorch, which is most of it).
-- The first run downloads an embedding model (~90 MB) from Hugging Face.
-  Later runs use the local cache.
+Measured on a fresh clone:
+
+| Step | Time | Disk |
+|---|---|---|
+| Core Python deps | **~22 s** | ~120 MB |
+| Web deps (`npm install`) | ~25 s | ~200 MB |
+| **Neural embeddings** (optional) | **~13 min** | **~2 GB** |
+
+The neural embedding package (`sentence-transformers`) pulls PyTorch,
+which is the entire cost. **It is optional.** Without it
+`graph/embeddings.py` uses a deterministic hashing embedding, so vector
+search still works and every demo question still answers — ranking is
+just less precise. `setup.bat` / `setup.sh` ask before installing it.
+
+Install it later any time:
+
+```bash
+pip install -e ".[ml]"
+```
+
+If you do install it, the first run downloads an embedding model
+(~90 MB) from Hugging Face; later runs use the local cache.
 
 ---
 
@@ -108,8 +126,14 @@ pip install --upgrade pip
 pip install -e .
 ```
 
-`-e .` installs the project from `pyproject.toml` (FalkorDB client,
-FastAPI, Gemini SDK, sentence-transformers, MCP, pytest, ruff).
+`-e .` installs the core project from `pyproject.toml`: FalkorDB client,
+FastAPI, the Gemini SDK, MCP, pydantic, httpx, pyyaml. ~22 seconds.
+
+Optionally add neural embeddings (~13 min, ~2 GB — pulls PyTorch):
+
+```bash
+pip install -e ".[ml]"
+```
 
 ### 3.3 Configuration
 

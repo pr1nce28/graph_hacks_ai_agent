@@ -99,7 +99,7 @@ set "VENV_PY=%CD%\.venv\Scripts\python.exe"
 REM ---------------------------------------------------------------- python deps
 echo.
 echo [3/6] Installing Python dependencies...
-echo       (sentence-transformers pulls PyTorch; this can take a few minutes)
+echo       Core packages only - this takes well under a minute.
 "%VENV_PY%" -m pip install --upgrade pip --quiet
 "%VENV_PY%" -m pip install -e . --quiet
 if errorlevel 1 (
@@ -109,7 +109,26 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-echo   [ok] Python dependencies installed
+echo   [ok] core Python dependencies installed
+
+REM Neural embeddings are optional and pull PyTorch (~2 GB, ~13 min).
+echo.
+echo   Optional: neural sentence embeddings give better semantic search.
+echo   Without them the app uses a deterministic hashing embedding, so
+echo   everything still works - ranking is just less precise.
+set /p "WANT_ML=  Install them now? [y/N] "
+if /i "%WANT_ML%"=="y" (
+    echo   Installing sentence-transformers (this can take ~13 minutes)...
+    "%VENV_PY%" -m pip install -e ".[ml]" --quiet
+    if errorlevel 1 (
+        echo   [!] that failed; continuing without them.
+        echo       You can retry later: .venv\Scripts\python.exe -m pip install -e ".[ml]"
+    ) else (
+        echo   [ok] neural embeddings installed
+    )
+) else (
+    echo   [ok] skipping; using the hashing embedding fallback
+)
 
 REM ---------------------------------------------------------------- web deps
 echo.

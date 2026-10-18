@@ -266,26 +266,62 @@ def build_server(default_tenant: str | None = None) -> Any:
     return server
 
 
-async def call_tool(server: Any, name: str, arguments: dict[str, Any]) -> Any:
-    """Call a tool over the server, normalising the v1/v2 return type."""
-    res = await server.call_tool(name, arguments)
-    # v2 returns CallToolResult; unwrap the structured content when present.
+def _unwrap_content_blocks(blocks: Any) -> Any:
+    """Pull the tool's return value out of MCP content blocks.
+
+    Both SDK generations eventually hand back a list of ``TextContent``
+    whose ``.text`` is the JSON the tool returned, but they wrap it
+    differently:
+
+    * **v2** — ``CallToolResult`` with ``.structuredContent`` (already a
+      dict) and/or ``.content`` (a list of blocks).
+    * **v1** — a bare ``list`` of blocks, with no wrapper at all.
+
+    Handle all three shapes so the transport behaves identically on both.
+    """
+    import json
+
+    # v2: already-structured payload.
     for attr in ("structuredContent", "structured_content", "data"):
-        val = getattr(res, attr, None)
+        val = getattr(blocks, attr, None)
         if val is not None:
             return val
-    content = getattr(res, "content", None)
-    if content:
-        first = content[0]
-        text = getattr(first, "text", None)
-        if text is not None:
-            import json
 
+    # v1 hands back the list itself; v2 nests it under .content.
+    items = blocks if isinstance(blocks, list) else getattr(blocks, "content", None)
+    if isinstance(items, list) and items:
+        first = items[0]
+        text = getattr(first, "text", None)
+        if text is None and isinstance(first, str):
+            text = first
+        if text is not None:
             try:
                 return json.loads(text)
             except Exception:
                 return text
-    return res
+
+    return blocks
+
+
+async def call_tool(server: Any, name: str, arguments: dict[str, Any]) -> Any:
+    """Call a tool over the server, normalising the v1/v2 return type."""
+    res = await server.call_tool(name, arguments)
+    unwrapped = _unwrap_content_blocks(res)
+    if isinstance(unwrapped, str):
+        # A tool that returned a bare string still has to satisfy the
+        # GraphPath shape its callers expect.
+        import json
+
+        try:
+            return json.loads(unwrapped)
+        except Exception:
+            return {
+                "result": {"raw": unwrapped},
+                "path": {"nodes": [], "edges": []},
+                "cypher": "",
+                "ms": 0.0,
+            }
+    return unwrapped
 
 
 def main() -> None:
