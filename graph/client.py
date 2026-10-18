@@ -90,6 +90,7 @@ _pool = None  # type: ignore[var-annotated]
 # Cache of in-memory dev graphs, one per tenant (only used when FalkorDB
 # is unavailable or USE_DEV_GRAPH=true).
 _dev_graphs: dict[str, object] = {}
+_falkordb_unreachable: bool = False
 
 
 def _build_client():
@@ -157,10 +158,11 @@ def reset_client() -> None:
     Provided for tests and tooling that need to re-read configuration
     (e.g. after rotating credentials). Not part of the public API.
     """
-    global _client, _pool
+    global _client, _pool, _falkordb_unreachable
     with _client_lock:
         _client = None
         _pool = None
+        _falkordb_unreachable = False
 
 
 # ---------------------------------------------------------------------------
@@ -227,11 +229,13 @@ def get_graph(tenant: str):
         ValueError: if ``tenant`` is not a non-empty string.
         ImportError: if ``USE_DEV_GRAPH=false`` and ``falkordb`` is missing.
     """
+    global _falkordb_unreachable
+
     if not isinstance(tenant, str) or not tenant:
         raise ValueError(f"tenant must be a non-empty string, got {tenant!r}")
 
     mode = _dev_mode()
-    if mode in ("1", "true", "yes", "dev"):
+    if mode in ("1", "true", "yes", "dev") or _falkordb_unreachable:
         return _get_dev_graph(tenant)
 
     if not _FALKORDB_AVAILABLE:
@@ -252,6 +256,7 @@ def get_graph(tenant: str):
     except Exception as exc:
         if mode == "false":
             raise
+        _falkordb_unreachable = True
         log.warning(
             "FalkorDB unreachable at %s:%s (%s); using in-memory dev graph for %s",
             FALKORDB_HOST,
