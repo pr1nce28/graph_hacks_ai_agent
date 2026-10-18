@@ -125,6 +125,37 @@ def _value_to_python(value: Any) -> Any:
     return value
 
 
+def iter_node_dicts(obj: Any) -> "list[dict[str, Any]]":
+    """Recursively find every node-shaped dict inside a query result value.
+
+    Query results are not always flat. ``q_trace_decision`` returns
+    ``evidence`` as a LIST of ``{rel, src}`` maps and ``scope`` as a list
+    of nodes, so a shallow scan of the row misses them — which made the
+    citation checker drop perfectly valid ids.
+
+    A node-shaped dict is one with an ``id``. Nested lists and dicts are
+    walked too, so a value can be wrapped to any depth.
+    """
+    found: list[dict[str, Any]] = []
+    seen: set[int] = set()
+
+    def walk(v: Any) -> None:
+        if isinstance(v, dict):
+            if id(v) in seen:
+                return
+            seen.add(id(v))
+            if "id" in v and isinstance(v.get("id"), str):
+                found.append(v)
+            for child in v.values():
+                walk(child)
+        elif isinstance(v, (list, tuple)):
+            for child in v:
+                walk(child)
+
+    walk(obj)
+    return found
+
+
 def _run(graph: FalkorDBGraph, cypher: str, params: dict[str, Any] | None = None) -> QueryResult:
     """Execute ``cypher`` and capture the rows as dicts + the elapsed time.
 
@@ -524,6 +555,7 @@ QUERY_REGISTRY: dict[str, Any] = {
 
 __all__ = [
     "QueryResult",
+    "iter_node_dicts",
     "QUERY_REGISTRY",
     "q_vector_entry",
     "q_find_owner",

@@ -20,6 +20,7 @@ from graph.client import get_graph
 from graph.embeddings import embed_texts
 from graph.queries import QueryResult
 from graph.queries import _value_to_python as _flatten_node_value
+from graph.queries import iter_node_dicts
 from graph.queries import (
     q_centrality,
     q_find_experts,
@@ -50,26 +51,42 @@ __all__ = [
 
 
 def _result_to_path(result: QueryResult) -> dict[str, Any]:
-    """Project a :class:`QueryResult` to the GraphPath shape from CONTRACTS §1."""
-    nodes = []
+    """Project a :class:`QueryResult` to the GraphPath shape from CONTRACTS §1.
+
+    Walks the row values recursively: some queries return their nodes
+    nested inside maps or lists (``trace_decision`` returns
+    ``evidence: [{rel, src}]``), and a shallow scan would miss them.
+    """
+    nodes: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
     seen_nodes: set[str] = set()
     seen_edges: set[tuple[str, str, str]] = set()
+
     for row in result.rows:
         for v in row.values():
-            if isinstance(v, dict) and "id" in v:
-                nid = v["id"]
-                if nid not in seen_nodes:
-                    seen_nodes.add(nid)
-                    nodes.append(
-                        {
-                            "id": nid,
-                            "label": v.get("labels", ["Node"])[0]
-                            if isinstance(v.get("labels"), list)
-                            else v.get("label", "Node"),
-                            "name": v.get("name") or v.get("title") or v.get("text") or nid,
-                        }
-                    )
+            for node in iter_node_dicts(v):
+                nid = node["id"]
+                if nid in seen_nodes:
+                    continue
+                seen_nodes.add(nid)
+                labels = node.get("labels")
+                label = (
+                    labels[0]
+                    if isinstance(labels, list) and labels
+                    else node.get("label", "Node")
+                )
+                nodes.append(
+                    {
+                        "id": nid,
+                        "label": label,
+                        "name": node.get("name")
+                        or node.get("title")
+                        or node.get("text")
+                        or node.get("summary")
+                        or nid,
+                    }
+                )
+
     return {"nodes": nodes, "edges": edges}
 
 

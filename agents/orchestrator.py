@@ -465,11 +465,28 @@ class Orchestrator:
             return {"error": str(exc), "path": {"nodes": [], "edges": []}}
 
     def _harvest_path(self, tool_result: dict[str, Any]) -> None:
-        """Collect every node id mentioned in the tool result's path block."""
-        for n in tool_result.get("path", {}).get("nodes", []):
+        """Collect every node id this tool result exposed.
+
+        Both the GraphPath block and the raw ``result`` payload are
+        walked, recursively. Some tools return their nodes nested (for
+        example ``trace_decision`` returns ``evidence: [{rel, src}]``),
+        and only harvesting the flat ``path.nodes`` list made the
+        citation check drop valid ids the model had legitimately seen.
+        """
+        for n in tool_result.get("path", {}).get("nodes", []) or []:
             nid = n.get("id")
             if nid and nid != "n/a":
                 self._collected_ids.add(nid)
+
+        try:
+            from graph.queries import iter_node_dicts
+
+            for node in iter_node_dicts(tool_result.get("result")):
+                nid = node.get("id")
+                if isinstance(nid, str) and nid and nid != "n/a":
+                    self._collected_ids.add(nid)
+        except Exception as exc:  # never let harvesting break a turn
+            log.debug("harvest from result payload failed: %s", exc)
 
     # ------------------------------------------------------------------
     # Deterministic demo mode
