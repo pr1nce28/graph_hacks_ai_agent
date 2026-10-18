@@ -57,7 +57,7 @@
   Cypher write.
 - The whole test suite is green at every commit boundary.
 
-Total: **41 tests pass**, 5 skipped (FalkorDB runtime required).
+Total: **151 tests pass**, 4 skipped.
 
 ## Review notes per file
 

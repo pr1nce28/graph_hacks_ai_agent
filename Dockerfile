@@ -27,7 +27,7 @@ RUN pip install --upgrade pip && pip install \
         "httpx>=0.27" \
         "ruff>=0.5" \
         "pytest>=8.0" \
-        "mcp>=0.5"
+        "mcp>=1.0"
 
 # App code
 COPY . .

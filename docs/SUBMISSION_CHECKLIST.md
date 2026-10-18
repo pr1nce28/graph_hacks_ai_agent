@@ -17,7 +17,7 @@
 | 10 | Public repo, README, Cypher doc, video, deploy, track | Repo public; README links every artefact; `docs/CYPHER.md` generated; **no live deployment — complete local setup in `docs/SETUP.md`**, which rule 10 permits; tracks named in the README header. **Demo video still to be recorded.** | ☐ |
 | 11 | Disclose AI coding assistants | `docs/AI_DISCLOSURE.md` + PR template field | ☑ |
 | 12 | Explain model, queries, architecture, decisions | `P6-ALL-02` drill; `docs/CONTRIBUTIONS.md` | ☑ |
-| 13 | Not entirely AI-generated; meaningful contribution | Each query hand-tested in Browser (skipped locally); tests in `tests/` (41 pass) | ☑ |
+| 13 | Not entirely AI-generated; meaningful contribution | Each query hand-tested in Browser (skipped locally); tests in `tests/` (151 pass) | ☑ |
 | 14 | Prizes per track | Demo script has one beat per track (`docs/demo_script.md`) | ☑ |
 | 15 | IP belongs to team; agree internally | `docs/TEAM.md` + `LICENSE` (MIT) | ☑ |
 | 16 | Conduct | Code of conduct statement in `README.md` (comply with hackathon rules) | ☑ |
@@ -35,4 +35,4 @@
   gracefully).
 * The PR template (`./github/PULL_REQUEST_TEMPLATE.md`) requires the
   AI assistance field.
-* The 41-test pytest suite is the green gate for every commit.
+* The 151-test pytest suite is the green gate for every commit.
