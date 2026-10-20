@@ -33,6 +33,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -167,6 +168,19 @@ class Provider:
 # ---------------------------------------------------------------------------
 
 
+# Free-tier quota is per-model and resets on a rolling basis, so the
+# model with headroom today is not the one with headroom tomorrow.
+# Rather than make the user re-run scripts/pick_gemini_model whenever a
+# model runs dry, the provider falls through this list on a 429/404.
+FALLBACK_MODELS: list[str] = [
+    "gemini-3.8-flash",
+    "gemini-flash-latest",
+    "gemini-3.1-flash-lite",
+    "gemini-flash-lite-latest",
+    "gemini-3.5-flash",
+]
+
+
 class GeminiProvider(Provider):
     name = "gemini"
 
@@ -178,6 +192,18 @@ class GeminiProvider(Provider):
         )
         # gemini-2.0-flash is retired by the API; 3.8-flash is current.
         self.model = model or os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
+        # The configured model first, then the alternates, deduped.
+        extra = [m.strip() for m in os.environ.get("GEMINI_FALLBACK_MODELS", "").split(",") if m.strip()]
+        ordered = [self.model, *(extra or FALLBACK_MODELS)]
+        self.models: list[str] = list(dict.fromkeys(ordered))
+        # Remember the last model that worked so we do not re-probe a
+        # spent one on every single call.
+        self._preferred: str = self.model
+
+    @property
+    def model_chain(self) -> list[str]:
+        """Models to try, the last known-good one first."""
+        return list(dict.fromkeys([self._preferred, *self.models]))
 
     def available(self) -> bool:
         if not self.api_key:
@@ -201,21 +227,36 @@ class GeminiProvider(Provider):
     MAX_RETRIES = int(os.environ.get("GEMINI_MAX_RETRIES", "1"))
     MAX_RETRY_DELAY_S = float(os.environ.get("GEMINI_MAX_RETRY_DELAY_S", "10"))
 
-    @classmethod
-    def _retry_delay_s(cls, exc: Exception, attempt: int) -> float:
-        """Seconds to wait before retrying a 429; -1 if not retryable."""
-        code = getattr(exc, "code", None)
-        if code != 429 and "429" not in str(exc):
-            return -1.0
+    @staticmethod
+    def _retry_delay_s(exc: Exception, attempt: int) -> float:
+        """Suggested wait before retrying; -1 if the error is not transient.
+
+        Returns the *uncapped* delay the server asked for, so the caller
+        can tell a per-minute limit (seconds — worth waiting out) from a
+        per-day one (hours — better to switch model).
+
+        Transient classes:
+          * **429** — quota; the server states how long.
+          * **5xx** — capacity or upstream hiccup; short backoff.
+        Anything else (auth, bad request, unknown model) is not retryable.
+        """
         import re
 
-        m = re.search(r"retryDelay['\"]?\s*:\s*['\"]?(\d+)", str(exc))
-        delay = float(m.group(1)) if m else min(2.0**attempt, 30.0)
-        return min(delay, cls.MAX_RETRY_DELAY_S)
+        msg = str(exc)
+        code = getattr(exc, "code", None)
+
+        if code == 429 or "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+            m = re.search(r"retryDelay['\"]?\s*:\s*['\"]?(\d+)", msg)
+            return float(m.group(1)) if m else min(2.0**attempt, 30.0)
+
+        if code in (500, 502, 503, 504) or any(
+            str(c) in msg for c in (500, 502, 503, 504)
+        ):
+            return 2.0 * (attempt + 1)
+
+        return -1.0
 
     def complete(self, system, messages, tools, max_tokens=1024) -> TurnResult:
-        import time
-
         from google import genai  # type: ignore
         from google.genai import types  # type: ignore
 
@@ -285,27 +326,57 @@ class GeminiProvider(Provider):
         )
 
         resp = None
-        for attempt in range(self.MAX_RETRIES + 1):
-            try:
-                resp = client.models.generate_content(
-                    model=self.model,
-                    contents=contents,
-                    config=config,
-                )
+        last_exc: Exception | None = None
+
+        for model in self.model_chain:
+            for attempt in range(self.MAX_RETRIES + 1):
+                try:
+                    resp = client.models.generate_content(
+                        model=model,
+                        contents=contents,
+                        config=config,
+                    )
+                    if model != self._preferred:
+                        log.info("gemini: switched to %s (previous model spent)", model)
+                    self._preferred = model
+                    break
+                except Exception as exc:
+                    last_exc = exc
+                    delay = self._retry_delay_s(exc, attempt)
+                    if delay < 0:
+                        # Not transient (auth, bad request, unknown
+                        # model) - another model will not help either.
+                        raise
+
+                    # A per-minute limit asks for seconds; waiting is
+                    # worth it. A per-day limit asks for hours; retrying
+                    # the same model is pointless, so move on immediately.
+                    worth_waiting = (
+                        attempt < self.MAX_RETRIES and delay <= self.MAX_RETRY_DELAY_S
+                    )
+                    if worth_waiting:
+                        log.warning(
+                            "gemini %s rate-limited; retrying in %.1fs (%d/%d)",
+                            model,
+                            delay,
+                            attempt + 1,
+                            self.MAX_RETRIES,
+                        )
+                        time.sleep(delay)
+                        continue
+
+                    log.warning(
+                        "gemini %s unavailable (%s%s); trying the next model",
+                        model,
+                        type(exc).__name__,
+                        f", retry in {delay:.0f}s" if delay >= 60 else "",
+                    )
+                    break
+            if resp is not None:
                 break
-            except Exception as exc:
-                delay = self._retry_delay_s(exc, attempt)
-                if delay < 0 or attempt >= self.MAX_RETRIES:
-                    raise
-                log.warning(
-                    "gemini rate-limited (429); retrying in %.1fs (attempt %d/%d)",
-                    delay,
-                    attempt + 1,
-                    self.MAX_RETRIES,
-                )
-                time.sleep(delay)
-        if resp is None:  # pragma: no cover - loop always sets or raises
-            raise RuntimeError("gemini: no response after retries")
+
+        if resp is None:
+            raise last_exc or RuntimeError("gemini: no model in the chain answered")
 
         text = ""
         calls: list[ToolCall] = []

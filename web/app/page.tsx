@@ -24,8 +24,9 @@ import { NodeDetail } from "./node-detail";
 import { Timeline } from "./timeline";
 import {
   ask,
-  fetchInfo,
   fetchTenants,
+  watchInfo,
+  type ApiInfo,
   type OrchestratorEvent,
   type PathEvent,
 } from "../lib/ws";
@@ -53,11 +54,7 @@ interface MemoryOp {
 }
 
 export default function HomePage() {
-  const [info, setInfo] = useState<{
-    name: string;
-    phase: number;
-    tracks: string[];
-  } | null>(null);
+  const [info, setInfo] = useState<ApiInfo | null>(null);
   const [tenants, setTenants] = useState<string[]>([]);
   const [tenant, setTenant] = useState<string>("org_acme");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -96,11 +93,14 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    void fetchInfo().then(setInfo);
+    // watchInfo retries until the API answers, so a page loaded while the
+    // API is still starting does not stay stuck on "phase ?".
+    const stop = watchInfo(setInfo);
     void fetchTenants().then((ts) => {
       setTenants(ts);
       if (ts.length && !ts.includes(tenant)) setTenant(ts[0]);
     });
+    return stop;
   }, [tenant]);
 
   const handleSend = (q: string) => {

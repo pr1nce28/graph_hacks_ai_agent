@@ -119,18 +119,56 @@ export function ask(
   };
 }
 
-export async function fetchInfo(): Promise<{
+export interface ApiInfo {
   name: string;
   phase: number;
   tracks: string[];
-} | null> {
+}
+
+export async function fetchInfo(): Promise<ApiInfo | null> {
   try {
-    const r = await fetch(`${API_BASE}/info`);
+    const r = await fetch(`${API_BASE}/info`, { cache: "no-store" });
     if (!r.ok) return null;
-    return (await r.json()) as { name: string; phase: number; tracks: string[] };
+    return (await r.json()) as ApiInfo;
   } catch {
     return null;
   }
+}
+
+/**
+ * Poll `/info` until it answers, then call `onInfo`.
+ *
+ * The API is often still starting (or restarting) when the page loads.
+ * A single failed fetch used to leave the header stuck on "phase ?" and
+ * the Tracks panel empty for the life of the tab, because the effect
+ * only ran once. This retries with a backoff and stops once it has an
+ * answer.
+ */
+export function watchInfo(
+  onInfo: (info: ApiInfo) => void,
+  { attempts = 10, delayMs = 1500 }: { attempts?: number; delayMs?: number } = {},
+): () => void {
+  let cancelled = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const tick = async (remaining: number) => {
+    if (cancelled) return;
+    const info = await fetchInfo();
+    if (cancelled) return;
+    if (info) {
+      onInfo(info);
+      return;
+    }
+    if (remaining > 0) {
+      timer = setTimeout(() => void tick(remaining - 1), delayMs);
+    }
+  };
+
+  void tick(attempts);
+  return () => {
+    cancelled = true;
+    if (timer) clearTimeout(timer);
+  };
 }
 
 export async function fetchTenants(): Promise<string[]> {
